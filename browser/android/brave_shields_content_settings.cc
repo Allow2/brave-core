@@ -365,3 +365,5 @@ jint JNI_BraveShieldsContentSettings_GetAutoShredMode(
 
 }  // namespace android
 }  // namespace chrome
+
+DEFINE_JNI(BraveShieldsContentSettings)

@@ -68,3 +68,5 @@ bool IsAppInTaskStack() {
 }
 
 }  // namespace brave_shields
+
+DEFINE_JNI(BraveFirstPartyStorageCleanerUtils)
