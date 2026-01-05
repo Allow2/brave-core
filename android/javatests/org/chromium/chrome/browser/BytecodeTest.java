@@ -1911,6 +1911,7 @@ public class BytecodeTest {
                         Runnable.class,
                         BooleanSupplier.class,
                         BookmarkManagerOpener.class,
+                        SnackbarManager.class,
                         View.class));
         Assert.assertTrue(
                 constructorsMatch(
