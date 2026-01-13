@@ -202,6 +202,7 @@ import org.chromium.content_public.browser.MediaSession;
 import org.chromium.content_public.browser.MediaSessionObserver;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.ViewProvider;
+import org.chromium.ui.base.ActivityResultTracker;
 import org.chromium.ui.base.ActivityWindowAndroid;
 import org.chromium.ui.base.IntentRequestTracker;
 import org.chromium.ui.base.WindowAndroid;
@@ -1509,6 +1510,7 @@ public class BytecodeTest {
                         Activity.class,
                         BrowserControlsStateProvider.class,
                         Supplier.class,
+                        Supplier.class,
                         SnackbarManager.class,
                         ActivityLifecycleDispatcher.class,
                         TabModelSelector.class,
@@ -1523,6 +1525,7 @@ public class BytecodeTest {
                         WindowAndroid.class,
                         Supplier.class,
                         HomeSurfaceTracker.class,
+                        ActivityResultTracker.class,
                         ObservableSupplier.class,
                         NonNullObservableSupplier.class,
                         OneshotSupplier.class,
