@@ -680,6 +680,7 @@ if (!is_android) {
       include_dirs = [ "$target_gen_dir" ]
       deps += [
         "//base",
+        "//brave/components/brave_origin/buildflags",
         "//brave/installer/setup:run_all_unittests",
         "//brave/installer/setup:unit_tests",
         "//chrome/chrome_elf:nt_registry",
