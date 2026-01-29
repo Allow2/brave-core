@@ -45,7 +45,7 @@ static void JNI_BraveFirstPartyStorageCleanerUtils_CleanupTLDFirstPartyStorage(
 static void
 JNI_BraveFirstPartyStorageCleanerUtils_TriggerCurrentAppStateNotification(
     JNIEnv* env,
-    const base::android::JavaParamRef<jobject>& j_profile) {
+    const base::android::JavaRef<jobject>& j_profile) {
   CHECK(env);
   Profile* profile = Profile::FromJavaObject(j_profile);
   if (!profile) {
@@ -68,3 +68,5 @@ bool IsAppInTaskStack() {
 }
 
 }  // namespace brave_shields
+
+DEFINE_JNI(BraveFirstPartyStorageCleanerUtils)
