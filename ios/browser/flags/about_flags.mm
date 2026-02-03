@@ -19,6 +19,7 @@
 #include "brave/ios/browser/ui/tab_tray/features.h"
 #include "brave/ios/browser/ui/web_view/features.h"
 #include "build/build_config.h"
+#include "components/webui/flags/feature_entry.h"
 #include "components/webui/flags/feature_entry_macros.h"
 #include "components/webui/flags/flags_state.h"
 #include "net/base/features.h"
@@ -29,6 +30,19 @@
 #endif
 
 #define EXPAND_FEATURE_ENTRIES(...) __VA_ARGS__,
+
+#if BUILDFLAG(ENABLE_BRAVE_WALLET)
+const flags_ui::FeatureEntry::FeatureParam
+    kZCashShieldedTransactionsDisabled[] = {
+        {"zcash_shielded_transactions_enabled", "false"}};
+const flags_ui::FeatureEntry::FeatureParam kZCashShieldedTransactionsEnabled[] =
+    {{"zcash_shielded_transactions_enabled", "false"}};
+const flags_ui::FeatureEntry::FeatureVariation kZCashFeatureVariations[] = {
+    {"- Shielded support disabled", kZCashShieldedTransactionsDisabled,
+     std::size(kZCashShieldedTransactionsDisabled), nullptr},
+    {"- Shielded support enabled", kZCashShieldedTransactionsEnabled,
+     std::size(kZCashShieldedTransactionsEnabled), nullptr}};
+#endif  // BUILDFLAG(ENABLE_BRAVE_WALLET)
 
 #define BRAVE_SKU_SDK_FEATURE_ENTRIES                   \
   EXPAND_FEATURE_ENTRIES({                              \
@@ -47,8 +61,9 @@
           "Enable BraveWallet ZCash support",                                 \
           "Zcash support for native Brave Wallet",                            \
           flags_ui::kOsIos,                                                   \
-          FEATURE_VALUE_TYPE(                                                 \
-              brave_wallet::features::kBraveWalletZCashFeature),              \
+          FEATURE_WITH_PARAMS_VALUE_TYPE(                                     \
+              brave_wallet::features::kBraveWalletZCashFeature,               \
+              kZCashFeatureVariations, "BraveWalletZCash"),                   \
       },                                                                      \
       {                                                                       \
           "brave-wallet-bitcoin",                                             \
