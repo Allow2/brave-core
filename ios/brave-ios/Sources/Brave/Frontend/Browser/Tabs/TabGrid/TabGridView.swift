@@ -198,6 +198,7 @@ struct TabGridView: View {
             isFocused: $viewModel.isSearching,
             scrollView: containerView.collectionView
           )
+          .containerCornerOffset(.leading, sizeToFit: true)
         }
       }
       .padding(.horizontal, 16)
@@ -423,6 +424,7 @@ struct TabGridView: View {
       .imageScale(.large)
       .labelStyle(.iconOnly)
     }
+    .containerCornerOffset(.leading, sizeToFit: true)
     .foregroundStyle(Color(braveSystemName: .textSecondary))
     .dynamicTypeSize(.xSmall..<DynamicTypeSize.accessibility2)
   }
@@ -533,6 +535,7 @@ struct TabGridView: View {
           .foregroundStyle(Color(braveSystemName: .textSecondary))
       }
     }
+    .containerCornerOffset(.leading, sizeToFit: true)
     .padding(.vertical, 4)
   }
 

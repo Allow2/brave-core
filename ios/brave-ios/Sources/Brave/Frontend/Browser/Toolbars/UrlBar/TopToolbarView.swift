@@ -525,7 +525,11 @@ class TopToolbarView: UIView, ToolbarProtocol {
 
     mainStackView.snp.remakeConstraints { make in
       make.top.bottom.equalTo(self)
-      make.leading.trailing.equalTo(self.safeAreaLayoutGuide)
+      if #available(iOS 26.0, *) {
+        make.leading.trailing.equalTo(layoutGuide(for: .safeArea(cornerAdaptation: .horizontal)))
+      } else {
+        make.leading.trailing.equalTo(safeAreaLayoutGuide)
+      }
     }
 
     scrollToTopButton.snp.makeConstraints { make in
