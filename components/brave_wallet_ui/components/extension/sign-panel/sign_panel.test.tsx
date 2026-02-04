@@ -18,10 +18,7 @@ import { mockOriginInfo } from '../../../stories/mock-data/mock-origin-info'
 import { mockSolanaAccount } from '../../../common/constants/mocks'
 
 // Utils
-import {
-  // eslint-disable-next-line import/no-named-default
-  default as BraveCoreThemeProvider,
-} from '../../../../common/BraveCoreThemeProvider'
+import { default as BraveCoreThemeProvider } from '../../../../common/BraveCoreThemeProvider'
 import { createMockStore } from '../../../utils/test-utils'
 
 // Components
