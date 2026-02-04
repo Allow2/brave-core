@@ -476,9 +476,25 @@ void ConversationAPIV2Client::OnQueryDataReceived(
   auto& result_params = result->GetDict();
   std::optional<std::string> model_key =
       GetLeoModelKeyFromResponse(result_params);
+  const auto* object_type = result_params.FindString("object");
+  if (!object_type) {
+    return;
+  }
 
-  if (auto result_data = ParseOAICompletionResponse(result_params, model_key)) {
-    callback.Run(std::move(*result_data));
+  if (*object_type == "chat.completion.chunk") {
+    if (auto result_data =
+            ParseOAICompletionResponse(result_params, model_key)) {
+      callback.Run(std::move(*result_data));
+    }
+  } else if (*object_type == "brave-chat.contentReceipt") {
+    uint64_t total_tokens = base::saturated_cast<uint64_t>(
+        result_params.FindInt("total_tokens").value_or(0));
+    uint64_t trimmed_tokens = base::saturated_cast<uint64_t>(
+        result_params.FindInt("trimmed_tokens").value_or(0));
+    auto event = mojom::ConversationEntryEvent::NewContentReceiptEvent(
+        mojom::ContentReceiptEvent::New(total_tokens, trimmed_tokens));
+
+    callback.Run(GenerationResultData(std::move(event), std::move(model_key)));
   }
 
   // Tool calls - in OpenAI format they're inside choices[0].delta.tool_calls
