@@ -128,6 +128,7 @@ if (enable_brave_wallet) {
 brave_chrome_browser_deps = [
   "//base",
   "//brave/app:brave_generated_resources_grit",
+  "//brave/browser:brave_global_features_impl",
   "//brave/browser:browser_process",
   "//brave/browser:sparkle_buildflags",
   "//brave/browser/brave_account",
@@ -716,6 +717,7 @@ brave_chrome_browser_allow_circular_includes_from = [
   "//brave/browser/ui",
   "//brave/browser/brave_stats",
   "//brave/browser/ntp_background",
+  "//brave/browser:brave_global_features_impl",
 ]
 
 if (enable_ai_chat) {
