@@ -207,7 +207,7 @@ TEST(ProtoConversionTest, SerializeDeserializeToolUseEvent_ValidData) {
   // Create mojom ToolUseEvent
   auto mojom_event = mojom::ToolUseEvent::New(
       "test_tool", "tool_id_123", "anything for arguments_json",
-      std::vector<mojom::ContentBlockPtr>(), nullptr);
+      std::vector<mojom::ContentBlockPtr>(), nullptr, false);
 
   // mixed content blocks
   auto text_block = mojom::TextContentBlock::New();
@@ -250,7 +250,7 @@ TEST(ProtoConversionTest, SerializeDeserializeToolUseEvent_ValidData) {
 TEST(ProtoConversionTest, SerializeDeserializeToolUseEvent_NoOutput) {
   // Create mojom ToolUseEvent without output
   auto mojom_event = mojom::ToolUseEvent::New("test_tool", "tool_id_123", "{}",
-                                              std::nullopt, nullptr);
+                                              std::nullopt, nullptr, false);
 
   // Serialize to proto
   store::ToolUseEventProto proto_event;
@@ -269,8 +269,8 @@ TEST(ProtoConversionTest, SerializeDeserializeToolUseEvent_NoOutput) {
 TEST(ProtoConversionTest, SerializeToolUseEvent_InvalidId) {
   store::ToolUseEventProto proto_event;
 
-  auto mojom_event =
-      mojom::ToolUseEvent::New("test_tool", "", "{}", std::nullopt, nullptr);
+  auto mojom_event = mojom::ToolUseEvent::New("test_tool", "", "{}",
+                                              std::nullopt, nullptr, false);
   bool success = SerializeToolUseEvent(mojom_event, &proto_event);
 
   EXPECT_FALSE(success);
@@ -282,8 +282,8 @@ TEST(ProtoConversionTest, SerializeToolUseEvent_InvalidId) {
 TEST(ProtoConversionTest, SerializeToolUseEvent_InvalidToolName) {
   store::ToolUseEventProto proto_event;
 
-  auto mojom_event =
-      mojom::ToolUseEvent::New("", "tool_id_123", "{}", std::nullopt, nullptr);
+  auto mojom_event = mojom::ToolUseEvent::New("", "tool_id_123", "{}",
+                                              std::nullopt, nullptr, false);
   bool success = SerializeToolUseEvent(mojom_event, &proto_event);
 
   EXPECT_FALSE(success);
@@ -315,6 +315,31 @@ TEST(ProtoConversionTest, DeserializeToolUseEvent_InvalidContentBlocks) {
   EXPECT_TRUE(mojom_event->output->at(0)->is_text_content_block());
   EXPECT_EQ(mojom_event->output->at(0)->get_text_content_block()->text,
             "Valid text");
+}
+
+TEST(ProtoConversionTest, SerializeDeserializeToolUseEvent_IsServerResult) {
+  // Test is_server_result = true
+  auto mojom_event_server = mojom::ToolUseEvent::New(
+      "brave_web_search", "tooluse_server", R"({"query": "test"})",
+      std::nullopt, nullptr, true);
+
+  store::ToolUseEventProto proto_event;
+  EXPECT_TRUE(SerializeToolUseEvent(mojom_event_server, &proto_event));
+  EXPECT_TRUE(proto_event.is_server_result());
+
+  auto deserialized = DeserializeToolUseEvent(proto_event);
+  EXPECT_TRUE(deserialized->is_server_result);
+
+  // Test is_server_result = false (default)
+  auto mojom_event_client = mojom::ToolUseEvent::New(
+      "client_tool", "tooluse_client", "{}", std::nullopt, nullptr, false);
+
+  store::ToolUseEventProto proto_event2;
+  EXPECT_TRUE(SerializeToolUseEvent(mojom_event_client, &proto_event2));
+  EXPECT_FALSE(proto_event2.is_server_result());
+
+  auto deserialized2 = DeserializeToolUseEvent(proto_event2);
+  EXPECT_FALSE(deserialized2->is_server_result);
 }
 
 TEST(ProtoConversionTest, SerializeDeserializeSkillEntry) {
