@@ -69,4 +69,8 @@ BASE_FEATURE(kBraveWalletAnkrBalancesFeature,
 BASE_FEATURE(kBraveWalletTransactionSimulationsFeature,
              "BraveWalletTransactionSimulations",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+#if BUILDFLAG(IS_IOS)
+BASE_FEATURE(kBraveWalletWebUIFeature, base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 }  // namespace brave_wallet::features
