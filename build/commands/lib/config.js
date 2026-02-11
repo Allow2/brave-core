@@ -238,13 +238,9 @@ const Config = function () {
     'dcheck_always_on',
     'enable_updater',
     'gemini_production_api_url',
-    'gemini_production_client_id',
-    'gemini_production_client_secret',
     'gemini_production_fee_address',
     'gemini_production_oauth_url',
     'gemini_sandbox_api_url',
-    'gemini_sandbox_client_id',
-    'gemini_sandbox_client_secret',
     'gemini_sandbox_fee_address',
     'gemini_sandbox_oauth_url',
     'google_default_client_id',
@@ -262,13 +258,9 @@ const Config = function () {
     'updater_dev_endpoint',
     'updater_prod_endpoint',
     'uphold_production_api_url',
-    'uphold_production_client_id',
-    'uphold_production_client_secret',
     'uphold_production_fee_address',
     'uphold_production_oauth_url',
     'uphold_sandbox_api_url',
-    'uphold_sandbox_client_id',
-    'uphold_sandbox_client_secret',
     'uphold_sandbox_fee_address',
     'uphold_sandbox_oauth_url',
     'use_prebuilt_omaha4',
@@ -673,23 +665,15 @@ Config.prototype.buildArgs = function () {
     delete args.bitflyer_sandbox_fee_address
     delete args.bitflyer_sandbox_url
     delete args.gemini_production_api_url
-    delete args.gemini_production_client_id
-    delete args.gemini_production_client_secret
     delete args.gemini_production_fee_address
     delete args.gemini_production_oauth_url
     delete args.gemini_sandbox_api_url
-    delete args.gemini_sandbox_client_id
-    delete args.gemini_sandbox_client_secret
     delete args.gemini_sandbox_fee_address
     delete args.gemini_sandbox_oauth_url
     delete args.uphold_production_api_url
-    delete args.uphold_production_client_id
-    delete args.uphold_production_client_secret
     delete args.uphold_production_fee_address
     delete args.uphold_production_oauth_url
     delete args.uphold_sandbox_api_url
-    delete args.uphold_sandbox_client_id
-    delete args.uphold_sandbox_client_secret
     delete args.uphold_sandbox_fee_address
     delete args.uphold_sandbox_oauth_url
     delete args.zebpay_production_api_url

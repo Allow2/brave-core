@@ -435,7 +435,10 @@ source_set("constants") {
     "//ui/base",
   ]
 
-  public_deps = [ "//brave/components/brave_wallet/common" ]
+  public_deps = [
+    "//brave/brave_domains:constants",
+    "//brave/components/brave_wallet/common",
+  ]
 }
 
 source_set("pref_names") {
