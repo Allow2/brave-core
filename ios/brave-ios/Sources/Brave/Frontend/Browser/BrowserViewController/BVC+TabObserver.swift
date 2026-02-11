@@ -302,6 +302,11 @@ extension BrowserViewController: TabObserver {
       maybeRecordBraveSearchDailyUsage(url: lastCommittedURL)
     }
 
+    // Track navigation for Allow2 parental controls
+    if !tab.isPrivate {
+      trackAllow2Usage(url: tab.visibleURL)
+    }
+
     // Added this method to determine long press menu actions better
     // Since these actions are depending on tabmanager opened WebsiteCount
     updateToolbarUsingTabManager(tabManager)

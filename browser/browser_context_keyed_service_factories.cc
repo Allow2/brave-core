@@ -6,6 +6,7 @@
 #include "brave/browser/browser_context_keyed_service_factories.h"
 
 #include "base/feature_list.h"
+#include "brave/browser/allow2/allow2_service_factory.h"
 #include "brave/browser/brave_account/brave_account_service_factory.h"
 #include "brave/browser/brave_adaptive_captcha/brave_adaptive_captcha_service_factory.h"
 #include "brave/browser/brave_origin/brave_origin_service_factory.h"
@@ -116,6 +117,7 @@
 namespace brave {
 
 void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
+  allow2::Allow2ServiceFactory::GetInstance();
   brave_adaptive_captcha::BraveAdaptiveCaptchaServiceFactory::GetInstance();
 #if BUILDFLAG(ENABLE_BRAVE_ADS)
   brave_ads::AdsServiceFactory::GetInstance();

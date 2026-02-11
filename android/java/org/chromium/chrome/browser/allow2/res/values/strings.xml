@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (c) 2024 The Brave Authors. All rights reserved.
+     This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this file,
+     You can obtain one at https://mozilla.org/MPL/2.0/. -->
+<resources>
+    <!-- Settings -->
+    <string name="allow2_settings_title">Parental Freedom</string>
+    <string name="allow2_settings_subtitle">Manage screen time with Allow2</string>
+    <string name="allow2_settings_pair_title">Connect to Allow2</string>
+    <string name="allow2_settings_pair_summary">Scan QR code or enter pairing code</string>
+    <string name="allow2_settings_paired_title">Connected to Allow2</string>
+    <string name="allow2_settings_paired_summary">%1$d children configured</string>
+    <string name="allow2_settings_current_child">Current User</string>
+    <string name="allow2_settings_no_child_selected">No user selected</string>
+    <string name="allow2_settings_shared_device">Shared Device Mode</string>
+    <string name="allow2_settings_shared_device_summary">Ask who\'s using the device on launch</string>
+    <string name="allow2_settings_status_title">Status</string>
+    <string name="allow2_settings_status_allowed">Access allowed</string>
+    <string name="allow2_settings_status_remaining">%1$s remaining</string>
+    <string name="allow2_settings_status_blocked">Blocked: %1$s</string>
+    <string name="allow2_settings_status_checking">Checking...</string>
+
+    <!-- Pairing -->
+    <string name="allow2_pairing_title">Connect to Allow2</string>
+    <string name="allow2_pairing_initializing">Setting up connection...</string>
+    <string name="allow2_pairing_scan_qr">Ask your parent to scan this code</string>
+    <string name="allow2_pairing_instruction">Open the Allow2 app on your parent\'s phone and scan this QR code</string>
+    <string name="allow2_pairing_or_code">or enter this code:</string>
+    <string name="allow2_pairing_scanned">Code scanned!</string>
+    <string name="allow2_pairing_waiting_confirm">Waiting for parent to confirm...</string>
+    <string name="allow2_pairing_success">Connected!</string>
+    <plurals name="allow2_pairing_children_found">
+        <item quantity="one">%1$d child found</item>
+        <item quantity="other">%1$d children found</item>
+    </plurals>
+    <string name="allow2_pairing_failed">Connection failed</string>
+    <string name="allow2_pairing_expired">Code expired</string>
+    <string name="allow2_pairing_expired_message">The pairing code has expired. Please try again.</string>
+    <string name="allow2_retry">Try Again</string>
+
+    <!-- Child Selection -->
+    <string name="allow2_child_select_title">Who\'s using Brave?</string>
+    <string name="allow2_child_select_subtitle">Select your profile</string>
+    <string name="allow2_enter_pin_for">Enter PIN for %1$s</string>
+    <string name="allow2_pin_label">PIN</string>
+    <string name="allow2_pin_invalid_format">PIN must be 4-6 digits</string>
+    <string name="allow2_pin_incorrect">Incorrect PIN</string>
+    <string name="allow2_pin_verification_failed">PIN verification failed</string>
+    <string name="allow2_confirm">Continue</string>
+
+    <!-- Block Overlay -->
+    <string name="allow2_blocked_title">Time\'s Up!</string>
+    <string name="allow2_blocked_default_reason">Internet time has ended</string>
+    <string name="allow2_blocked_day_type">(%1$s)</string>
+    <string name="allow2_blocked_resumes_at">Resumes at %1$s</string>
+    <string name="allow2_blocked_cannot_dismiss">You cannot dismiss this screen</string>
+
+    <!-- Request More Time -->
+    <string name="allow2_request_more_time">Request More Time</string>
+    <string name="allow2_request_title">Request More Time</string>
+    <string name="allow2_request_message">Tell your parent why you need more time:</string>
+    <string name="allow2_request_hint">e.g., I need to finish my homework</string>
+    <string name="allow2_request_send">Send Request</string>
+    <string name="allow2_request_sending">Sending...</string>
+    <string name="allow2_request_pending">Request sent - waiting for parent\'s response</string>
+
+    <!-- Switch User -->
+    <string name="allow2_switch_user">Switch User</string>
+
+    <!-- Why Blocked -->
+    <string name="allow2_why_blocked">Why am I blocked?</string>
+    <string name="allow2_why_blocked_title">Block Reason</string>
+    <string name="allow2_why_blocked_intro">Your access is currently restricted.</string>
+    <string name="allow2_why_blocked_banned">Internet access has been blocked by your parent.</string>
+    <string name="allow2_why_blocked_timeblock">Access is not allowed during this scheduled time.</string>
+    <string name="allow2_why_blocked_time_used">You have used all your internet time for today.</string>
+    <string name="allow2_why_blocked_day_type">Today is: %1$s</string>
+
+    <!-- Warnings -->
+    <string name="allow2_warning_15min">15 minutes of internet time remaining</string>
+    <string name="allow2_warning_5min">Only 5 minutes left!</string>
+    <string name="allow2_warning_1min">Browsing ends in:</string>
+
+    <!-- Unpaired -->
+    <string name="allow2_unpaired_title">Device Released</string>
+    <string name="allow2_unpaired_message">This device is no longer managed by Allow2</string>
+
+    <!-- Accessibility -->
+    <string name="allow2_pairing_qr_description">QR code for pairing with Allow2</string>
+    <string name="allow2_pairing_enter_code">Enter this code in the Allow2 app</string>
+
+    <!-- Notification Channel -->
+    <string name="allow2_notification_channel_name">Parental Freedom Warnings</string>
+    <string name="allow2_notification_channel_description">Time limit warnings from Allow2</string>
+</resources>

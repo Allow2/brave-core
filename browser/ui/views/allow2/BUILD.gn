@@ -1,0 +1,31 @@
+# Copyright (c) 2024 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import("//build/config/features.gni")
+
+source_set("allow2") {
+  sources = [
+    "allow2_block_view.cc",
+    "allow2_block_view.h",
+    "allow2_child_select_view.cc",
+    "allow2_child_select_view.h",
+    "allow2_pairing_view.cc",
+    "allow2_pairing_view.h",
+  ]
+
+  deps = [
+    "//base",
+    "//brave/browser/allow2",
+    "//brave/components/allow2/browser",
+    "//brave/components/allow2/common",
+    "//chrome/browser/ui",
+    "//components/constrained_window",
+    "//skia",
+    "//ui/base",
+    "//ui/base/mojom:mojom_headers",
+    "//ui/gfx",
+    "//ui/views",
+  ]
+}

@@ -1,0 +1,383 @@
+/* Copyright (c) 2024 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+#ifndef BRAVE_COMPONENTS_ALLOW2_BROWSER_ALLOW2_SERVICE_H_
+#define BRAVE_COMPONENTS_ALLOW2_BROWSER_ALLOW2_SERVICE_H_
+
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
+#include "base/observer_list.h"
+#include "base/sequence_checker.h"
+#include "base/timer/timer.h"
+#include "base/values.h"
+#include "brave/components/allow2/browser/allow2_child_shield.h"
+#include "brave/components/allow2/browser/allow2_usage_tracker.h"
+#include "brave/components/allow2/common/allow2_constants.h"
+#include "components/keyed_service/core/keyed_service.h"
+
+namespace network {
+class SharedURLLoaderFactory;
+}  // namespace network
+
+class PrefService;
+
+namespace allow2 {
+
+class Allow2ApiClient;
+class Allow2BlockOverlay;
+class Allow2ChildManager;
+class Allow2ChildShield;
+class Allow2CredentialManager;
+class Allow2PairingHandler;
+class Allow2UsageTracker;
+class Allow2WarningBanner;
+class Allow2WarningController;
+
+// Represents a child account.
+struct Child {
+  uint64_t id = 0;
+  std::string name;
+  std::string pin_hash;
+  std::string pin_salt;
+};
+
+// Represents the result of an Allow2 check.
+struct CheckResult {
+  bool allowed = true;
+  int remaining_seconds = 0;
+  int64_t expires = 0;
+  bool banned = false;
+  std::string day_type;
+  std::string block_reason;
+};
+
+// Observer interface for Allow2 state changes.
+class Allow2ServiceObserver : public base::CheckedObserver {
+ public:
+  // Called when the paired state changes (paired/unpaired).
+  virtual void OnPairedStateChanged(bool is_paired) {}
+
+  // Called when the blocking state changes.
+  virtual void OnBlockingStateChanged(bool is_blocked,
+                                      const std::string& reason) {}
+
+  // Called when remaining time is updated.
+  virtual void OnRemainingTimeUpdated(int remaining_seconds) {}
+
+  // Called when a warning threshold is reached.
+  virtual void OnWarningThresholdReached(int remaining_seconds) {}
+
+  // Called when the current child changes.
+  virtual void OnCurrentChildChanged(const std::optional<Child>& child) {}
+
+  // Called when credentials are invalidated (e.g., 401 from API).
+  virtual void OnCredentialsInvalidated() {}
+
+ protected:
+  ~Allow2ServiceObserver() override = default;
+};
+
+// Main service for Allow2 parental controls integration.
+// This service handles:
+// - Device pairing with parent's Allow2 account
+// - Usage tracking and time limit enforcement
+// - Blocking overlay management
+// - "Request more time" functionality
+//
+// SECURITY NOTE: Device cannot unpair itself. Unpair is only possible
+// from parent's Allow2 portal/app. When released remotely, device
+// receives 401 on next check and clears local credentials.
+class Allow2Service : public KeyedService,
+                      public Allow2UsageTrackerObserver,
+                      public Allow2ChildShieldObserver {
+ public:
+  using PairCallback =
+      base::OnceCallback<void(bool success, const std::string& error)>;
+  using CheckCallback = base::OnceCallback<void(const CheckResult& result)>;
+  using RequestTimeCallback =
+      base::OnceCallback<void(bool success, const std::string& error)>;
+
+  Allow2Service(
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+      PrefService* local_state,
+      PrefService* profile_prefs);
+  ~Allow2Service() override;
+
+  Allow2Service(const Allow2Service&) = delete;
+  Allow2Service& operator=(const Allow2Service&) = delete;
+
+  // Observer management.
+  void AddObserver(Allow2ServiceObserver* observer);
+  void RemoveObserver(Allow2ServiceObserver* observer);
+
+  // ============================================================================
+  // Pairing (QR/PIN only - device NEVER handles parent credentials)
+  // ============================================================================
+
+  // Check if device is paired with an Allow2 account.
+  bool IsPaired() const;
+
+  // Represents a pairing session initiated by this device.
+  struct PairingSession {
+    std::string session_id;
+    std::string qr_code_url;  // URL to display as QR code
+    std::string pin_code;     // 6-digit PIN for manual entry
+  };
+
+  using InitPairingCallback =
+      base::OnceCallback<void(bool success, const PairingSession& session,
+                              const std::string& error)>;
+  using PairingStatusCallback =
+      base::OnceCallback<void(bool completed, bool success,
+                              const std::string& error)>;
+
+  // Initialize QR code pairing session.
+  // Device displays QR code, parent scans with their Allow2 app.
+  // Parent authenticates with passkey/biometrics on their device.
+  // Device NEVER sees parent credentials.
+  void InitQRPairing(const std::string& device_name,
+                     InitPairingCallback callback);
+
+  // Initialize PIN code pairing session (fallback for QR).
+  // Device displays 6-digit PIN, parent enters in their Allow2 app.
+  // Parent authenticates with passkey/biometrics on their device.
+  // Device NEVER sees parent credentials.
+  void InitPINPairing(const std::string& device_name,
+                      InitPairingCallback callback);
+
+  // Check status of pairing session (poll until completed).
+  // Returns completed=true when parent has approved the pairing.
+  void CheckPairingStatus(const std::string& session_id,
+                          PairingStatusCallback callback);
+
+  // Cancel an active pairing session.
+  void CancelPairing(const std::string& session_id);
+
+  // Get the list of children associated with the paired account.
+  std::vector<Child> GetChildren() const;
+
+  // ============================================================================
+  // Child Selection (Shared Device Mode)
+  // ============================================================================
+
+  // Check if device is in shared mode (no specific child locked).
+  bool IsSharedDeviceMode() const;
+
+  // Select a child for the current session (shared device mode).
+  // Returns false if PIN validation fails.
+  bool SelectChild(uint64_t child_id, const std::string& pin);
+
+  // Get the currently selected child, or nullopt if none selected.
+  std::optional<Child> GetCurrentChild() const;
+
+  // Clear the current child selection (return to selection screen).
+  void ClearCurrentChild();
+
+  // ============================================================================
+  // Usage Tracking and Blocking
+  // ============================================================================
+
+  // Check current allowances with the Allow2 API.
+  // Should be called periodically (every 10 seconds) and on navigation.
+  void CheckAllowance(CheckCallback callback);
+
+  // Track a URL visit for the current activity type.
+  void TrackUrl(const std::string& url);
+
+  // Check if browsing is currently blocked.
+  bool IsBlocked() const;
+
+  // Get the remaining time in seconds.
+  int GetRemainingSeconds() const;
+
+  // Get the current block reason, if blocked.
+  std::string GetBlockReason() const;
+
+  // ============================================================================
+  // Request More Time
+  // ============================================================================
+
+  // Request additional time from parent.
+  // |activity_id| is the activity type (e.g., kInternet).
+  // |minutes| is the requested duration.
+  // |message| is an optional message to the parent.
+  void RequestMoreTime(ActivityId activity_id,
+                       int minutes,
+                       const std::string& message,
+                       RequestTimeCallback callback);
+
+  // ============================================================================
+  // Enabled State
+  // ============================================================================
+
+  // Check if Allow2 is enabled for this profile.
+  bool IsEnabled() const;
+
+  // Enable or disable Allow2 for this profile.
+  // Note: This does not unpair the device, just disables enforcement.
+  void SetEnabled(bool enabled);
+
+  // Get credential manager for testing.
+  Allow2CredentialManager* GetCredentialManagerForTesting();
+
+  // ============================================================================
+  // Component Accessors
+  // ============================================================================
+
+  // Get the block overlay controller.
+  Allow2BlockOverlay* GetBlockOverlay();
+
+  // Get the child shield controller.
+  Allow2ChildShield* GetChildShield();
+
+  // Get the warning banner controller.
+  Allow2WarningBanner* GetWarningBanner();
+
+  // Get the child manager.
+  Allow2ChildManager* GetChildManager();
+
+  // Get the pairing handler.
+  Allow2PairingHandler* GetPairingHandler();
+
+  // Get the usage tracker.
+  Allow2UsageTracker* GetUsageTracker();
+
+  // ============================================================================
+  // Tracking Control
+  // ============================================================================
+
+  // Start usage tracking for the current child.
+  void StartTracking();
+
+  // Stop usage tracking.
+  void StopTracking();
+
+  // Pause tracking (e.g., app goes to background).
+  void PauseTracking();
+
+  // Resume tracking (e.g., app returns to foreground).
+  void ResumeTracking();
+
+  // Check if tracking is active.
+  bool IsTrackingActive() const;
+
+  // ============================================================================
+  // UI State Helpers
+  // ============================================================================
+
+  // Check if the block overlay should be shown.
+  bool ShouldShowBlockOverlay() const;
+
+  // Check if the child selection shield should be shown.
+  bool ShouldShowChildShield() const;
+
+  // Show the block overlay.
+  void ShowBlockOverlay();
+
+  // Dismiss the block overlay (e.g., time was granted).
+  void DismissBlockOverlay();
+
+  // Show the child selection shield.
+  void ShowChildShield();
+
+  // Dismiss the child selection shield.
+  void DismissChildShield();
+
+  // Get a weak pointer to this service.
+  base::WeakPtr<Allow2Service> GetWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  // KeyedService overrides.
+  void Shutdown() override;
+
+  // Allow2UsageTrackerObserver overrides.
+  void OnCheckResult(const CheckResult& result) override;
+  void OnTrackingStarted() override;
+  void OnTrackingStopped() override;
+  void OnCredentialsInvalidated() override;
+
+  // Allow2ChildShieldObserver overrides.
+  void OnPINAccepted(uint64_t child_id) override;
+
+  // Start the periodic check timer.
+  void StartCheckTimer();
+
+  // Stop the periodic check timer.
+  void StopCheckTimer();
+
+  // Internal handler for check result (shared by direct calls and observer).
+  void OnCheckResultInternal(const CheckResult& result);
+
+  // Internal handler for credentials invalidated.
+  void OnCredentialsInvalidatedInternal();
+
+  // Callback when "request time" is clicked in block overlay.
+  void OnRequestTimeFromOverlay(int minutes, const std::string& message);
+
+  // Callback when "request time" is clicked in warning banner.
+  void OnRequestTimeFromBanner();
+
+  // Notify observers of blocking state change.
+  void NotifyBlockingStateChanged(bool is_blocked, const std::string& reason);
+
+  // Notify observers of remaining time update.
+  void NotifyRemainingTimeUpdated(int remaining_seconds);
+
+  // Notify observers of warning threshold.
+  void NotifyWarningThreshold(int remaining_seconds);
+
+  // Check if we should show a warning for the given remaining time.
+  bool ShouldShowWarning(int remaining_seconds) const;
+
+  // Cache check result to prefs for offline operation.
+  void CacheCheckResult(const CheckResult& result);
+
+  // Load cached check result from prefs.
+  std::optional<CheckResult> LoadCachedCheckResult() const;
+
+  SEQUENCE_CHECKER(sequence_checker_);
+
+  raw_ptr<PrefService> local_state_ = nullptr;
+  raw_ptr<PrefService> profile_prefs_ = nullptr;
+
+  std::unique_ptr<Allow2ApiClient> api_client_;
+  std::unique_ptr<Allow2BlockOverlay> block_overlay_;
+  std::unique_ptr<Allow2ChildManager> child_manager_;
+  std::unique_ptr<Allow2ChildShield> child_shield_;
+  std::unique_ptr<Allow2CredentialManager> credential_manager_;
+  std::unique_ptr<Allow2PairingHandler> pairing_handler_;
+  std::unique_ptr<Allow2UsageTracker> usage_tracker_;
+  std::unique_ptr<Allow2WarningBanner> warning_banner_;
+  std::unique_ptr<Allow2WarningController> warning_controller_;
+
+  // Periodic check timer.
+  base::RepeatingTimer check_timer_;
+
+  // Current blocking state.
+  bool is_blocked_ = false;
+  std::string block_reason_;
+  int remaining_seconds_ = 0;
+
+  // Last warning threshold that was notified.
+  int last_warning_threshold_ = 0;
+
+  // Observers.
+  base::ObserverList<Allow2ServiceObserver> observers_;
+
+  base::WeakPtrFactory<Allow2Service> weak_ptr_factory_{this};
+};
+
+}  // namespace allow2
+
+#endif  // BRAVE_COMPONENTS_ALLOW2_BROWSER_ALLOW2_SERVICE_H_

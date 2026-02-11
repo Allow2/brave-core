@@ -1,0 +1,31 @@
+# Copyright (c) 2024 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import("//brave/build/config.gni")
+
+assert(is_android)
+
+source_set("android") {
+  sources = [
+    "allow2_bridge.cc",
+    "allow2_bridge.h",
+  ]
+
+  deps = [
+    "//base",
+    "//chrome/android:jni_headers",
+    "//chrome/browser/profiles:profile",
+    "//content/public/browser",
+    "//net",
+    "//url",
+  ]
+
+  public_deps = [ "//base" ]
+}
+
+# Generate JNI headers from Java files
+generate_jni("jni_headers") {
+  sources = [ "//brave/android/java/org/chromium/chrome/browser/allow2/Allow2Bridge.java" ]
+}

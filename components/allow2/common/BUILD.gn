@@ -1,0 +1,38 @@
+# Copyright (c) 2024 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import("//build/config/features.gni")
+
+source_set("common") {
+  sources = [
+    "allow2_constants.h",
+    "allow2_utils.cc",
+    "allow2_utils.h",
+    "pref_names.h",
+  ]
+
+  deps = [
+    "//base",
+    "//build:buildflag_header_h",
+    "//components/pref_registry",
+    "//components/prefs",
+    "//url",
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+
+  sources = [ "allow2_utils_unittest.cc" ]
+
+  deps = [
+    ":common",
+    "//base",
+    "//base/test:test_support",
+    "//components/prefs:test_support",
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}

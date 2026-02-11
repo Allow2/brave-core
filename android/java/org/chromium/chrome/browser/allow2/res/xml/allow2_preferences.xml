@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (c) 2024 The Brave Authors. All rights reserved.
+     This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this file,
+     You can obtain one at https://mozilla.org/MPL/2.0/. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        android:key="allow2_enabled"
+        android:title="@string/allow2_settings_title"
+        android:summary="@string/allow2_settings_subtitle"
+        android:defaultValue="true"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="allow2_pairing"
+        android:title="@string/allow2_settings_pair_title"
+        android:summary="@string/allow2_settings_pair_summary"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="allow2_status"
+        android:title="@string/allow2_settings_status_title"
+        android:summary="@string/allow2_settings_status_checking"
+        android:selectable="false"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="allow2_child"
+        android:title="@string/allow2_settings_current_child"
+        android:selectable="false"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreferenceCompat
+        android:key="allow2_shared_device"
+        android:title="@string/allow2_settings_shared_device"
+        android:summary="@string/allow2_settings_shared_device_summary"
+        android:defaultValue="true"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="allow2_switch_user"
+        android:title="@string/allow2_switch_user"
+        app:iconSpaceReserved="false" />
+
+</PreferenceScreen>

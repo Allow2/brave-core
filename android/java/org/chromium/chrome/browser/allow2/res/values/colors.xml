@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (c) 2024 The Brave Authors. All rights reserved.
+     This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this file,
+     You can obtain one at https://mozilla.org/MPL/2.0/. -->
+<resources>
+    <!-- Allow2 Brand Colors -->
+    <color name="allow2_primary">#5D4EFF</color>
+    <color name="allow2_primary_dark">#4338CA</color>
+    <color name="allow2_secondary">#10B981</color>
+
+    <!-- Status Colors -->
+    <color name="allow2_allowed">#10B981</color>
+    <color name="allow2_blocked">#EF4444</color>
+    <color name="allow2_warning">#F59E0B</color>
+    <color name="allow2_warning_critical">#DC2626</color>
+
+    <!-- Block Overlay -->
+    <color name="allow2_blocked_background">#F2EF4444</color>
+
+    <!-- Warning Banner Backgrounds -->
+    <color name="allow2_warning_low">#10B981</color>
+    <color name="allow2_warning_medium">#F59E0B</color>
+    <color name="allow2_warning_high">#EF4444</color>
+</resources>

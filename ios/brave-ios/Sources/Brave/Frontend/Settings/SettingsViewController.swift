@@ -649,6 +649,21 @@ class SettingsViewController: TableViewController {
       )
     }
 
+    // Parental Freedom (Allow2)
+    section.rows.append(
+      Row(
+        text: Strings.ParentalFreedom.settingsMenuTitle,
+        selection: { [unowned self] in
+          let parentalFreedomSettings = UIHostingController(
+            rootView: ParentalFreedomSettingsView()
+          )
+          self.navigationController?.pushViewController(parentalFreedomSettings, animated: true)
+        },
+        image: UIImage(braveSystemNamed: "leo.shield.done"),
+        accessory: .disclosureIndicator
+      )
+    )
+
     return section
   }
 

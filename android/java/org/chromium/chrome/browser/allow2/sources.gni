@@ -1,0 +1,31 @@
+# Copyright (c) 2024 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Allow2 Parental Controls Java/Kotlin sources
+
+brave_allow2_java_sources = [
+  "//brave/android/java/org/chromium/chrome/browser/allow2/Allow2Bridge.java",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/Allow2BrowserIntegration.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/Allow2Constants.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/Allow2NativeWorker.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/R.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/models/Allow2Activity.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/models/Allow2CheckResult.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/models/Allow2Child.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/models/Allow2Credentials.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/models/Allow2PairingState.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/services/Allow2ApiClient.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/services/Allow2CredentialManager.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/services/Allow2Service.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/services/Allow2UsageTracker.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/ui/Allow2BlockOverlayActivity.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/ui/Allow2ChildSelectDialog.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/ui/Allow2PairingActivity.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/ui/Allow2SettingsFragment.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/ui/Allow2WarningBanner.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/util/Allow2DeviceInfo.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/util/Allow2PinVerifier.kt",
+  "//brave/android/java/org/chromium/chrome/browser/allow2/util/Allow2TimeFormatter.kt",
+]

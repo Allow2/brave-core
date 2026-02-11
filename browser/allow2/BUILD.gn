@@ -1,0 +1,40 @@
+# Copyright (c) 2024 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import("//brave/build/config.gni")
+import("//build/config/features.gni")
+
+source_set("allow2") {
+  sources = [
+    "allow2_service_factory.cc",
+    "allow2_service_factory.h",
+    "allow2_tab_helper.cc",
+    "allow2_tab_helper.h",
+  ]
+
+  deps = [
+    "//base",
+    "//brave/components/allow2/browser",
+    "//brave/components/allow2/common",
+    "//chrome/browser:browser_process",
+    "//chrome/browser/profiles:profile",
+    "//chrome/browser/ui",
+    "//components/keyed_service/content",
+    "//components/keyed_service/core",
+    "//components/pref_registry",
+    "//components/prefs",
+    "//content/public/browser",
+    "//services/network/public/cpp",
+    "//url",
+  ]
+
+  if (toolkit_views) {
+    deps += [ "//brave/browser/ui/views/allow2" ]
+  }
+
+  if (is_android) {
+    deps += [ "//brave/browser/allow2/android" ]
+  }
+}

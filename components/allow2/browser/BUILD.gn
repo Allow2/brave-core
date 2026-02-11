@@ -1,0 +1,103 @@
+# Copyright (c) 2024 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+import("//build/config/features.gni")
+
+static_library("browser") {
+  sources = [
+    "allow2_api_client.cc",
+    "allow2_api_client.h",
+    "allow2_block_overlay.cc",
+    "allow2_block_overlay.h",
+    "allow2_child_manager.cc",
+    "allow2_child_manager.h",
+    "allow2_child_shield.cc",
+    "allow2_child_shield.h",
+    "allow2_credential_manager.cc",
+    "allow2_credential_manager.h",
+    "allow2_pairing_handler.cc",
+    "allow2_pairing_handler.h",
+    "allow2_service.cc",
+    "allow2_service.h",
+    "allow2_usage_tracker.cc",
+    "allow2_usage_tracker.h",
+    "allow2_warning_banner.cc",
+    "allow2_warning_banner.h",
+    "allow2_warning_controller.cc",
+    "allow2_warning_controller.h",
+  ]
+
+  deps = [
+    "//base",
+    "//brave/components/allow2/common",
+    "//build:buildflag_header_h",
+    "//components/keyed_service/core",
+    "//components/os_crypt/sync",
+    "//components/pref_registry",
+    "//components/prefs",
+    "//crypto",
+    "//net",
+    "//services/network/public/cpp",
+    "//url",
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+
+  sources = [
+    "allow2_api_client_unittest.cc",
+    "allow2_block_overlay_unittest.cc",
+    "allow2_child_manager_unittest.cc",
+    "allow2_child_shield_unittest.cc",
+    "allow2_credential_manager_unittest.cc",
+    "allow2_integration_test.cc",
+    "allow2_pairing_handler_unittest.cc",
+    "allow2_security_unittest.cc",
+    "allow2_service_unittest.cc",
+    "allow2_usage_tracker_unittest.cc",
+    "allow2_warning_banner_unittest.cc",
+    "allow2_warning_controller_unittest.cc",
+  ]
+
+  deps = [
+    ":browser",
+    "//base",
+    "//base/test:test_support",
+    "//brave/components/allow2/common",
+    "//components/os_crypt/sync:test_support",
+    "//components/prefs:test_support",
+    "//content/test:test_support",
+    "//net:test_support",
+    "//services/network:test_support",
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}
+
+# Browser tests for Allow2 (end-to-end testing)
+source_set("browser_tests") {
+  testonly = true
+
+  sources = [
+    "allow2_browser_test.cc",
+  ]
+
+  deps = [
+    ":browser",
+    "//base",
+    "//base/test:test_support",
+    "//brave/components/allow2/common",
+    "//chrome/browser",
+    "//chrome/test:test_support",
+    "//components/os_crypt/sync:test_support",
+    "//components/prefs:test_support",
+    "//content/test:test_support",
+    "//net:test_support",
+    "//services/network:test_support",
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}
