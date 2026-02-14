@@ -134,8 +134,11 @@ class Allow2PairingHandler {
   // Check if pairing is currently in progress.
   bool IsPairingInProgress() const;
 
-  // Get the QR code URL (only valid in QR mode after initialization).
+  // Get the QR code as base64-encoded PNG data URL (only valid in QR mode).
   std::string GetQRCodeUrl() const;
+
+  // Get the web pairing URL (the URL encoded in the QR code).
+  std::string GetWebPairingUrl() const;
 
   // Get the PIN code (only valid in PIN mode after initialization).
   std::string GetPINCode() const;
@@ -192,7 +195,8 @@ class Allow2PairingHandler {
 
   // Session data.
   std::string session_id_;
-  std::string qr_code_url_;
+  std::string qr_code_url_;       // Base64-encoded PNG image
+  std::string web_pairing_url_;   // URL encoded in QR code
   std::string pin_code_;
   std::string device_name_;
   std::string last_error_;

@@ -19,6 +19,8 @@ static_library("browser") {
     "allow2_credential_manager.h",
     "allow2_pairing_handler.cc",
     "allow2_pairing_handler.h",
+    "allow2_qr_code_generator.cc",
+    "allow2_qr_code_generator.h",
     "allow2_service.cc",
     "allow2_service.h",
     "allow2_usage_tracker.cc",
@@ -37,9 +39,12 @@ static_library("browser") {
     "//components/os_crypt/sync",
     "//components/pref_registry",
     "//components/prefs",
+    "//components/qr_code_generator",
     "//crypto",
     "//net",
     "//services/network/public/cpp",
+    "//skia",
+    "//ui/gfx/codec",
     "//url",
   ]
 }

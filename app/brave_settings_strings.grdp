@@ -965,6 +965,53 @@
     Don't allow site to open Leo AI chat
   </message>
 
+  <!-- Settings / Allow2 Parental Freedom -->
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_TITLE" desc="The title for Parental Freedom section in settings">
+    Allow2 Parental Freedom
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_DESCRIPTION" desc="Description for Parental Freedom settings">
+    Manage parental controls with Allow2 to set screen time limits and content restrictions.
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_ENABLE_LABEL" desc="Label for enabling Allow2 parental controls">
+    Enable Allow2 Parental Controls
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_PAIRING_STATUS" desc="Label for pairing status">
+    Pairing Status
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_PAIRED" desc="Status text when paired with Allow2">
+    Paired with Allow2
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_NOT_PAIRED" desc="Status text when not paired">
+    Not paired
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_START_PAIRING" desc="Button to start pairing">
+    Start Pairing
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_CANCEL_PAIRING" desc="Button to cancel pairing">
+    Cancel
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_ENTER_PIN" desc="Label for entering pairing PIN">
+    Enter this PIN in the Allow2 app:
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_SELECT_CHILD" desc="Label for selecting a child">
+    Select Child
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_SWITCH_USER" desc="Button to switch user">
+    Switch User
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_BLOCKING_STATUS" desc="Label for blocking status">
+    Access Status
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_ALLOWED" desc="Status when access is allowed">
+    Allowed
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_BLOCKED" desc="Status when access is blocked">
+    Blocked
+  </message>
+  <message name="IDS_SETTINGS_BRAVE_PARENTAL_FREEDOM_REMAINING_TIME" desc="Label for remaining time">
+    Time Remaining
+  </message>
+
   <!-- Settings / Sync -->
   <message name="IDS_SETTINGS_BRAVE_SYNC_TITLE" desc="The title for Brave Sync in settings">
     Sync

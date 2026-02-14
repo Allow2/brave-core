@@ -6,7 +6,7 @@
 #include "brave/browser/allow2/allow2_tab_helper.h"
 
 #include "brave/browser/allow2/allow2_service_factory.h"
-#include "brave/browser/ui/views/allow2/allow2_block_view.h"
+#include "brave/components/allow2/browser/allow2_block_overlay.h"
 #include "brave/components/allow2/browser/allow2_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -14,6 +14,10 @@
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
+
+#if defined(TOOLKIT_VIEWS)
+#include "brave/browser/allow2/allow2_block_view_delegate.h"
+#endif
 
 namespace allow2 {
 
@@ -135,8 +139,19 @@ void Allow2TabHelper::MaybeShowBlockOverlay() {
     return;
   }
 
-  // Already showing?
-  if (Allow2BlockView::IsShowing()) {
+#if defined(TOOLKIT_VIEWS)
+  // Ensure delegate is set up and connected to the overlay.
+  EnsureBlockViewDelegate();
+#endif
+
+  // Use the service to show the overlay (which will use the delegate).
+  service->ShowBlockOverlay();
+}
+
+#if defined(TOOLKIT_VIEWS)
+void Allow2TabHelper::EnsureBlockViewDelegate() {
+  Allow2Service* service = GetService();
+  if (!service) {
     return;
   }
 
@@ -146,26 +161,22 @@ void Allow2TabHelper::MaybeShowBlockOverlay() {
     return;
   }
 
-  // Show the block overlay.
-  Allow2BlockView::Show(
-      browser, service->GetBlockReason(), std::string(),
-      base::BindOnce(
-          [](base::WeakPtr<Allow2Service> service_weak, int minutes,
-             const std::string& message) {
-            if (service_weak) {
-              service_weak->RequestMoreTime(ActivityId::kInternet, minutes,
-                                            message, base::DoNothing());
-            }
-          },
-          service->GetWeakPtr()),
-      base::BindOnce(
-          [](base::WeakPtr<Allow2Service> service_weak) {
-            if (service_weak) {
-              service_weak->ShowChildShield();
-            }
-          },
-          service->GetWeakPtr()));
+  // Create delegate if needed.
+  if (!block_view_delegate_) {
+    block_view_delegate_ = std::make_unique<Allow2BlockViewDelegate>();
+  }
+
+  // Update the delegate with current browser and service.
+  block_view_delegate_->SetBrowser(browser);
+  block_view_delegate_->SetService(service->GetWeakPtr());
+
+  // Register delegate with the overlay controller.
+  Allow2BlockOverlay* overlay = service->GetBlockOverlay();
+  if (overlay && overlay->GetDelegate() != block_view_delegate_.get()) {
+    overlay->SetDelegate(block_view_delegate_.get());
+  }
 }
+#endif  // defined(TOOLKIT_VIEWS)
 
 void Allow2TabHelper::DismissBlockOverlay() {
   // Block view handles its own dismissal.

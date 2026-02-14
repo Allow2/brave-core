@@ -57,6 +57,10 @@ export default function addBraveRoutes(r: Partial<SettingsRoutes>) {
   }
   r.BRAVE_NEW_TAB = r.BASIC.createSection('/newTab', 'newTab')
 
+  if (pageVisibility.parentalFreedom) {
+    r.PARENTAL_FREEDOM = r.BASIC.createSection('/parentalFreedom', 'parentalFreedom')
+  }
+
   if (pageVisibility.leoAssistant) {
     r.BRAVE_LEO_ASSISTANT =
       r.BASIC.createSection('/leo-ai', 'leoAssistant')

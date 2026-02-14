@@ -15,9 +15,11 @@ source_set("common") {
 
   deps = [
     "//base",
+    "//base:i18n",
     "//build:buildflag_header_h",
     "//components/pref_registry",
     "//components/prefs",
+    "//crypto",
     "//url",
   ]
 }

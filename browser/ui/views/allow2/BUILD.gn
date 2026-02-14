@@ -17,7 +17,8 @@ source_set("allow2") {
 
   deps = [
     "//base",
-    "//brave/browser/allow2",
+    # NOTE: Do NOT add //brave/browser/allow2 here - it creates a circular dep.
+    # Use //brave/components/allow2/browser directly for Allow2Service.
     "//brave/components/allow2/browser",
     "//brave/components/allow2/common",
     "//chrome/browser/ui",

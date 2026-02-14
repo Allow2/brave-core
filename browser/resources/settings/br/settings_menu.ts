@@ -320,9 +320,19 @@ RegisterPolymerTemplateModifications({
 
     // Add search item
     const searchEl = getMenuElement(templateContent, '/search')
-    if (searchEl && syncEl) {
-      syncEl.insertAdjacentElement('afterend', searchEl)
+    if (searchEl) {
+      lastInserted.insertAdjacentElement('afterend', searchEl)
+      lastInserted = searchEl
     }
+
+    // Add Parental Freedom item (after Search)
+    const parentalFreedomEl = createMenuElement(
+      loadTimeData.getString('braveParentalFreedom'),
+      '/parentalFreedom',
+      'shield-done',
+      'parentalFreedom',
+    )
+    lastInserted = lastInserted.insertAdjacentElement('afterend', parentalFreedomEl)!
 
     // Add Extensions item
     const extensionEl = createMenuElement(

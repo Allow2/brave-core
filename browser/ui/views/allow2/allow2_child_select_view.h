@@ -59,6 +59,8 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
  private:
   // Represents a clickable child button.
   class ChildButton : public views::View {
+    METADATA_HEADER(ChildButton, views::View)
+
    public:
     ChildButton(const Child& child,
                 base::RepeatingCallback<void(uint64_t)> on_click);
@@ -69,9 +71,10 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
     // Set selected state (highlights the button).
     void SetSelected(bool selected);
 
-   private:
-    void OnClicked();
+    // views::View overrides:
+    bool OnMousePressed(const ui::MouseEvent& event) override;
 
+   private:
     uint64_t child_id_ = 0;
     bool selected_ = false;
     base::RepeatingCallback<void(uint64_t)> on_click_;

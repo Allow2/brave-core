@@ -82,7 +82,7 @@ std::optional<Credentials> Allow2CredentialManager::GetCredentials() const {
     return std::nullopt;
   }
 
-  auto parsed = base::JSONReader::Read(json);
+  auto parsed = base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!parsed || !parsed->is_dict()) {
     LOG(ERROR) << "Allow2: Failed to parse credentials JSON";
     return std::nullopt;

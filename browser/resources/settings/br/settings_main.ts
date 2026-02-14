@@ -13,6 +13,7 @@ import { loadTimeData } from '../i18n_setup.js'
 import '../brave_content_page/content_page_index.js'
 import '../getting_started_page/getting_started_page_index.js'
 import '../brave_origin_page/brave_origin_page.js'
+import '../brave_parental_freedom_page/brave_parental_freedom_subpage.js'
 import '../default_brave_shields_page/shields_page_index.js'
 import '../brave_default_extensions_page/brave_extensions_page_index.js'
 import '../brave_sync_page/brave_sync_page_index.js'
@@ -84,6 +85,22 @@ RegisterPolymerTemplateModifications({
                 prefs="{{prefs}}"
                 in-search-mode="[[inSearchMode_]]">
               </settings-brave-origin-page>
+            </template>
+          </div>
+        </template>
+      `)
+
+    // Insert the parental freedom page into the view manager
+    switcher.appendChild(
+      html`
+        <template is="dom-if" if="[[showPage_(pageVisibility_.parentalFreedom)]]">
+          <div slot="view" id="parentalFreedom" class="cr-centered-card-container">
+            <template is="dom-if" if="[[renderPlugin_(
+          routes_.PARENTAL_FREEDOM, lastRoute_, inSearchMode_)]]">
+              <settings-brave-parental-freedom-subpage
+                prefs="{{prefs}}"
+                in-search-mode="[[inSearchMode_]]">
+              </settings-brave-parental-freedom-subpage>
             </template>
           </div>
         </template>

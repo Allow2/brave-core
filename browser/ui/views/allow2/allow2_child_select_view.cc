@@ -108,11 +108,16 @@ void Allow2ChildSelectView::ChildButton::SetSelected(bool selected) {
   SchedulePaint();
 }
 
-void Allow2ChildSelectView::ChildButton::OnClicked() {
+bool Allow2ChildSelectView::ChildButton::OnMousePressed(
+    const ui::MouseEvent& event) {
   if (on_click_) {
     on_click_.Run(child_id_);
   }
+  return true;
 }
+
+BEGIN_METADATA(Allow2ChildSelectView, ChildButton)
+END_METADATA
 
 // Allow2ChildSelectView implementation.
 
@@ -198,7 +203,7 @@ Allow2ChildSelectView::Allow2ChildSelectView(
   auto* guest_button = children_container_->AddChildView(
       std::make_unique<ChildButton>(
           guest_child,
-          base::BindRepeating(&Allow2ChildSelectView::OnGuestClicked,
+          base::BindRepeating(&Allow2ChildSelectView::OnChildSelected,
                               base::Unretained(this))));
   child_buttons_.push_back(guest_button);
 
@@ -240,7 +245,6 @@ Allow2ChildSelectView::Allow2ChildSelectView(
       base::BindRepeating(&Allow2ChildSelectView::OnConfirmClicked,
                           base::Unretained(this)),
       u"Confirm"));
-  confirm_button_->SetProminent(true);
   confirm_button_->SetStyle(ui::ButtonStyle::kProminent);
   confirm_button_->SetEnabled(false);
   confirm_button_->SetVisible(false);
@@ -300,7 +304,7 @@ void Allow2ChildSelectView::OnChildSelected(uint64_t child_id) {
   selected_child_id_ = child_id;
 
   // Update button visuals.
-  for (auto* button : child_buttons_) {
+  for (const auto& button : child_buttons_) {
     button->SetSelected(button->child_id() == child_id);
   }
 
@@ -313,7 +317,7 @@ void Allow2ChildSelectView::OnConfirmClicked() {
     return;
   }
 
-  std::u16string pin = pin_field_->GetText();
+  std::u16string pin(pin_field_->GetText());
   if (pin.empty()) {
     ShowPinError("Please enter your PIN");
     return;
@@ -341,7 +345,7 @@ void Allow2ChildSelectView::UpdatePinVisibility() {
   confirm_button_->SetVisible(show_pin);
 
   if (show_pin) {
-    pin_field_->Clear();
+    pin_field_->SetText(u"");
     pin_field_->RequestFocus();
     confirm_button_->SetEnabled(false);
   }

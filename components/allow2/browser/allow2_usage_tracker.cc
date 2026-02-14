@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "brave/components/allow2/browser/allow2_api_client.h"
 #include "brave/components/allow2/browser/allow2_credential_manager.h"

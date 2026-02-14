@@ -24,6 +24,7 @@
 #include "brave/browser/ui/webui/settings/brave_adblock_handler.h"
 #include "brave/browser/ui/webui/settings/brave_appearance_handler.h"
 #include "brave/browser/ui/webui/settings/brave_default_extensions_handler.h"
+#include "brave/browser/ui/webui/settings/brave_parental_freedom_handler.h"
 #include "brave/browser/ui/webui/settings/brave_privacy_handler.h"
 #include "brave/browser/ui/webui/settings/brave_sync_handler.h"
 #include "brave/browser/ui/webui/settings/default_brave_shields_handler.h"
@@ -152,6 +153,8 @@ BraveSettingsUI::BraveSettingsUI(content::WebUI* web_ui) : SettingsUI(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<BraveWalletHandler>());
 #endif
   web_ui->AddMessageHandler(std::make_unique<BraveAdBlockHandler>());
+  web_ui->AddMessageHandler(
+      std::make_unique<allow2::BraveParentalFreedomHandler>());
 #if BUILDFLAG(ENABLE_AI_CHAT)
   web_ui->AddMessageHandler(
       std::make_unique<settings::BraveLeoAssistantHandler>());
@@ -284,6 +287,8 @@ void BraveSettingsUI::AddResources(content::WebUIDataSource* html_source,
                           brave_origin::IsBraveOriginEnabled());
   html_source->AddBoolean("isBraveOriginBrandedBuild",
                           BUILDFLAG(IS_BRAVE_ORIGIN_BRANDED));
+  // Allow2 parental controls - always enabled
+  html_source->AddBoolean("isParentalFreedomAllowed", true);
   html_source->AddBoolean("isTreeTabsFlagEnabled",
                           base::FeatureList::IsEnabled(tabs::kBraveTreeTab));
   html_source->AddString("braveSearchEngineName",

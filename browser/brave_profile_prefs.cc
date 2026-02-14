@@ -386,6 +386,8 @@ void RegisterProfilePrefsForMigration(
 }
 
 void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
+  // Note: Allow2 profile prefs are registered via Allow2ServiceFactory::RegisterProfilePrefs()
+  // which is called automatically by BrowserContextKeyedServiceFactory.
   brave_shields::BraveShieldsWebContentsObserver::RegisterProfilePrefs(
       registry);
 

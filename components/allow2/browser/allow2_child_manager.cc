@@ -10,12 +10,20 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "brave/components/allow2/common/allow2_utils.h"
 #include "brave/components/allow2/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 
 namespace allow2 {
+
+ChildInfo::ChildInfo() = default;
+ChildInfo::~ChildInfo() = default;
+ChildInfo::ChildInfo(const ChildInfo&) = default;
+ChildInfo& ChildInfo::operator=(const ChildInfo&) = default;
+ChildInfo::ChildInfo(ChildInfo&&) = default;
+ChildInfo& ChildInfo::operator=(ChildInfo&&) = default;
 
 Allow2ChildManager::Allow2ChildManager(PrefService* profile_prefs)
     : profile_prefs_(profile_prefs) {
@@ -26,9 +34,10 @@ Allow2ChildManager::Allow2ChildManager(PrefService* profile_prefs)
   std::string child_id_str =
       profile_prefs_->GetString(prefs::kAllow2ChildId);
   if (!child_id_str.empty()) {
-    try {
-      selected_child_id_ = std::stoull(child_id_str);
-    } catch (...) {
+    uint64_t parsed_id = 0;
+    if (base::StringToUint64(child_id_str, &parsed_id)) {
+      selected_child_id_ = parsed_id;
+    } else {
       selected_child_id_ = std::nullopt;
     }
   }
@@ -232,7 +241,8 @@ void Allow2ChildManager::LoadChildrenFromPrefs() {
     return;
   }
 
-  auto parsed = base::JSONReader::Read(children_json);
+  auto parsed = base::JSONReader::Read(children_json,
+                                        base::JSON_ALLOW_TRAILING_COMMAS);
   if (!parsed || !parsed->is_list()) {
     return;
   }

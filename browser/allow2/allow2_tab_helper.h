@@ -6,12 +6,17 @@
 #ifndef BRAVE_BROWSER_ALLOW2_ALLOW2_TAB_HELPER_H_
 #define BRAVE_BROWSER_ALLOW2_ALLOW2_TAB_HELPER_H_
 
+#include <memory>
+
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 
 namespace allow2 {
 
+#if defined(TOOLKIT_VIEWS)
+class Allow2BlockViewDelegate;
+#endif
 class Allow2Service;
 
 // Tab helper that observes navigation events and reports them to Allow2Service.
@@ -66,6 +71,14 @@ class Allow2TabHelper
 
   // Whether this tab should be tracked.
   bool ShouldTrack() const;
+
+#if defined(TOOLKIT_VIEWS)
+  // Ensure the block view delegate is ready (Views only).
+  void EnsureBlockViewDelegate();
+
+  // The Views delegate for showing block overlays.
+  std::unique_ptr<Allow2BlockViewDelegate> block_view_delegate_;
+#endif
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

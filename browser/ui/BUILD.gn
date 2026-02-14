@@ -345,6 +345,8 @@ source_set("ui") {
       "webui/settings/brave_site_settings_handler.h",
       "webui/settings/brave_sync_handler.cc",
       "webui/settings/brave_sync_handler.h",
+      "webui/settings/brave_parental_freedom_handler.cc",
+      "webui/settings/brave_parental_freedom_handler.h",
       "webui/settings/default_brave_shields_handler.cc",
       "webui/settings/default_brave_shields_handler.h",
       "webui/side_panel/reading_list/brave_reading_list_page_handler.cc",
@@ -380,6 +382,7 @@ source_set("ui") {
 
     deps += [
       "//base",
+      "//brave/browser/allow2:core",
       "//brave/browser/brave_account",
       "//brave/browser/email_aliases",
       "//brave/browser/ntp_background",

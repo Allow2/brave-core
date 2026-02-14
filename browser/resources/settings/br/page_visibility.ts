@@ -26,6 +26,7 @@ declare module '../page_visibility' {
     leoModels?: boolean
     newTab?: boolean
     origin?: boolean
+    parentalFreedom?: boolean
     playlist?: boolean
     shields?: boolean
     socialBlocking?: boolean
@@ -62,6 +63,7 @@ function getPageVisibility () {
       leoModels: false,
       newTab: false,
       origin: false,
+      parentalFreedom: false,
       playlist: false,
       shields: true,
       socialBlocking: true,
@@ -113,6 +115,7 @@ function getPageVisibility () {
               loadTimeData.getBoolean('shouldExposeElementsForTesting'),
     // </if>
     origin: loadTimeData.getBoolean('isOriginAllowed'),
+    parentalFreedom: loadTimeData.getBoolean('isParentalFreedomAllowed'),
   }
   // Proxy so we can respond to any other property
   return new Proxy(staticProps, {

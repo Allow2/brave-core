@@ -14,6 +14,14 @@
 
 namespace allow2 {
 
+// WarningBannerConfig struct out-of-line definitions
+WarningBannerConfig::WarningBannerConfig() = default;
+WarningBannerConfig::~WarningBannerConfig() = default;
+WarningBannerConfig::WarningBannerConfig(const WarningBannerConfig&) = default;
+WarningBannerConfig& WarningBannerConfig::operator=(const WarningBannerConfig&) = default;
+WarningBannerConfig::WarningBannerConfig(WarningBannerConfig&&) = default;
+WarningBannerConfig& WarningBannerConfig::operator=(WarningBannerConfig&&) = default;
+
 Allow2WarningBanner::Allow2WarningBanner() = default;
 
 Allow2WarningBanner::~Allow2WarningBanner() {

@@ -47,6 +47,13 @@ class Allow2WarningBannerObserver : public base::CheckedObserver {
 
 // Configuration for the warning banner display.
 struct WarningBannerConfig {
+  WarningBannerConfig();
+  ~WarningBannerConfig();
+  WarningBannerConfig(const WarningBannerConfig&);
+  WarningBannerConfig& operator=(const WarningBannerConfig&);
+  WarningBannerConfig(WarningBannerConfig&&);
+  WarningBannerConfig& operator=(WarningBannerConfig&&);
+
   // Current remaining seconds.
   int remaining_seconds = 0;
 

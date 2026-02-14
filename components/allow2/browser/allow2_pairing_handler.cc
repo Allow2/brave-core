@@ -137,6 +137,10 @@ std::string Allow2PairingHandler::GetQRCodeUrl() const {
   return qr_code_url_;
 }
 
+std::string Allow2PairingHandler::GetWebPairingUrl() const {
+  return web_pairing_url_;
+}
+
 std::string Allow2PairingHandler::GetPINCode() const {
   return pin_code_;
 }
@@ -176,6 +180,7 @@ void Allow2PairingHandler::OnInitComplete(const InitPairingResponse& response) {
 
   if (mode_ == PairingMode::kQRCode) {
     qr_code_url_ = response.qr_code_url;
+    web_pairing_url_ = response.web_pairing_url;
     VLOG(1) << "Allow2: QR code ready, session: " << session_id_;
 
     for (auto& observer : observers_) {
@@ -333,6 +338,7 @@ void Allow2PairingHandler::NotifyError(const std::string& error) {
 void Allow2PairingHandler::ResetSession() {
   session_id_.clear();
   qr_code_url_.clear();
+  web_pairing_url_.clear();
   pin_code_.clear();
   last_error_.clear();
   expires_in_seconds_ = 0;

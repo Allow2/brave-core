@@ -7,6 +7,7 @@
 #define BRAVE_COMPONENTS_ALLOW2_BROWSER_ALLOW2_API_CLIENT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,16 +26,6 @@ namespace allow2 {
 
 struct Credentials;
 
-// Response from pairing API.
-struct PairResponse {
-  bool success = false;
-  std::string error;
-  std::string user_id;
-  std::string pair_id;
-  std::string pair_token;
-  std::vector<Child> children;
-};
-
 // Response from check API.
 struct CheckResponse {
   bool success = false;
@@ -52,16 +43,31 @@ struct RequestTimeResponse {
 
 // Response from QR/PIN pairing initialization.
 struct InitPairingResponse {
+  InitPairingResponse();
+  ~InitPairingResponse();
+  InitPairingResponse(const InitPairingResponse&);
+  InitPairingResponse& operator=(const InitPairingResponse&);
+  InitPairingResponse(InitPairingResponse&&);
+  InitPairingResponse& operator=(InitPairingResponse&&);
+
   bool success = false;
   std::string error;
   std::string session_id;
-  std::string qr_code_url;  // For QR pairing
-  std::string pin_code;      // For PIN pairing
-  int expires_in = 0;        // Session expiry in seconds
+  std::string qr_code_url;      // Base64-encoded PNG image (data URL)
+  std::string web_pairing_url;  // The URL encoded in the QR code
+  std::string pin_code;         // For PIN pairing
+  int expires_in = 0;           // Session expiry in seconds
 };
 
 // Response from pairing status check.
 struct PairingStatusResponse {
+  PairingStatusResponse();
+  ~PairingStatusResponse();
+  PairingStatusResponse(const PairingStatusResponse&);
+  PairingStatusResponse& operator=(const PairingStatusResponse&);
+  PairingStatusResponse(PairingStatusResponse&&);
+  PairingStatusResponse& operator=(PairingStatusResponse&&);
+
   bool completed = false;
   bool success = false;
   bool scanned = false;  // True if QR code was scanned
@@ -76,7 +82,6 @@ struct PairingStatusResponse {
 // Handles all communication with the Allow2 backend.
 class Allow2ApiClient {
  public:
-  using PairCallback = base::OnceCallback<void(const PairResponse& response)>;
   using CheckCallback = base::OnceCallback<void(const CheckResponse& response)>;
   using RequestTimeCallback =
       base::OnceCallback<void(const RequestTimeResponse& response)>;
@@ -91,19 +96,6 @@ class Allow2ApiClient {
 
   Allow2ApiClient(const Allow2ApiClient&) = delete;
   Allow2ApiClient& operator=(const Allow2ApiClient&) = delete;
-
-  // Pair device with parent account using email/password.
-  void PairDevice(const std::string& email,
-                  const std::string& password,
-                  const std::string& device_token,
-                  const std::string& device_name,
-                  PairCallback callback);
-
-  // Pair device using pairing code.
-  void PairDeviceWithCode(const std::string& pairing_code,
-                          const std::string& device_token,
-                          const std::string& device_name,
-                          PairCallback callback);
 
   // Check current allowances.
   void Check(const Credentials& credentials,
@@ -146,29 +138,24 @@ class Allow2ApiClient {
 
  private:
   // URL loader completion handlers.
-  void OnPairComplete(std::unique_ptr<network::SimpleURLLoader> loader,
-                      PairCallback callback,
-                      std::unique_ptr<std::string> response_body);
-
   void OnCheckComplete(std::unique_ptr<network::SimpleURLLoader> loader,
                        CheckCallback callback,
-                       std::unique_ptr<std::string> response_body);
+                       std::optional<std::string> response_body);
 
   void OnRequestTimeComplete(std::unique_ptr<network::SimpleURLLoader> loader,
                              RequestTimeCallback callback,
-                             std::unique_ptr<std::string> response_body);
+                             std::optional<std::string> response_body);
 
   void OnInitPairingComplete(std::unique_ptr<network::SimpleURLLoader> loader,
                              bool is_qr_pairing,
                              InitPairingCallback callback,
-                             std::unique_ptr<std::string> response_body);
+                             std::optional<std::string> response_body);
 
   void OnPairingStatusComplete(std::unique_ptr<network::SimpleURLLoader> loader,
                                PairingStatusCallback callback,
-                               std::unique_ptr<std::string> response_body);
+                               std::optional<std::string> response_body);
 
   // Parse API responses.
-  PairResponse ParsePairResponse(const std::string& json);
   CheckResponse ParseCheckResponse(const std::string& json, int http_status);
   RequestTimeResponse ParseRequestTimeResponse(const std::string& json);
   InitPairingResponse ParseInitPairingResponse(const std::string& json,

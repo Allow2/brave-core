@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/functional/callback_forward.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -46,6 +46,11 @@ class Allow2BlockOverlayObserver : public base::CheckedObserver {
 
 // Configuration for the block overlay display.
 struct BlockOverlayConfig {
+  BlockOverlayConfig();
+  ~BlockOverlayConfig();
+  BlockOverlayConfig(const BlockOverlayConfig&);
+  BlockOverlayConfig& operator=(const BlockOverlayConfig&);
+
   // Primary block reason.
   BlockReason reason = BlockReason::kTimeLimitReached;
 
@@ -71,10 +76,27 @@ struct BlockOverlayConfig {
   std::string block_ends_at;
 };
 
+// Delegate interface for platform-specific UI implementation.
+// Views, WebUI, or other UI frameworks implement this to show the overlay.
+class Allow2BlockOverlayDelegate {
+ public:
+  virtual ~Allow2BlockOverlayDelegate() = default;
+
+  // Show the block overlay UI.
+  virtual void ShowBlockOverlay(const BlockOverlayConfig& config) = 0;
+
+  // Dismiss the block overlay UI.
+  virtual void DismissBlockOverlay() = 0;
+
+  // Check if the overlay is currently visible.
+  virtual bool IsBlockOverlayVisible() const = 0;
+};
+
 // Controller for the block overlay UI.
 // This is a platform-agnostic controller that manages the state
 // and logic for the block overlay. Platform-specific UI implementations
-// (Views on desktop, WebUI, etc.) observe this controller.
+// (Views on desktop, WebUI, etc.) implement Allow2BlockOverlayDelegate
+// and register with this controller.
 //
 // The overlay appears when:
 // - Time limit is reached (remaining seconds <= 0)
@@ -95,6 +117,11 @@ class Allow2BlockOverlay {
   // Observer management.
   void AddObserver(Allow2BlockOverlayObserver* observer);
   void RemoveObserver(Allow2BlockOverlayObserver* observer);
+
+  // Set the platform-specific UI delegate.
+  // Must be called before Show() to actually display UI.
+  void SetDelegate(Allow2BlockOverlayDelegate* delegate);
+  Allow2BlockOverlayDelegate* GetDelegate() const;
 
   // ============================================================================
   // Overlay Control
@@ -165,6 +192,8 @@ class Allow2BlockOverlay {
 
   BlockOverlayConfig config_;
   RequestTimeCallback request_callback_;
+
+  raw_ptr<Allow2BlockOverlayDelegate> delegate_ = nullptr;
 
   base::ObserverList<Allow2BlockOverlayObserver> observers_;
 };

@@ -14,6 +14,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
@@ -134,7 +135,7 @@ Allow2PairingView::Allow2PairingView(
 
   // Generate and set QR code.
   gfx::ImageSkia qr_image = GenerateQRCode(qr_code_url, kQRCodeSize);
-  qr_code_view_->SetImage(qr_image);
+  qr_code_view_->SetImage(ui::ImageModel::FromImageSkia(qr_image));
 
   // Instruction.
   instruction_label_ = AddChildView(std::make_unique<views::Label>(

@@ -7,6 +7,7 @@
 
 #include <utility>
 
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -26,6 +27,30 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace allow2 {
+
+// Child struct out-of-line definitions
+Child::Child() = default;
+Child::~Child() = default;
+Child::Child(const Child&) = default;
+Child& Child::operator=(const Child&) = default;
+Child::Child(Child&&) = default;
+Child& Child::operator=(Child&&) = default;
+
+// CheckResult struct out-of-line definitions
+CheckResult::CheckResult() = default;
+CheckResult::~CheckResult() = default;
+CheckResult::CheckResult(const CheckResult&) = default;
+CheckResult& CheckResult::operator=(const CheckResult&) = default;
+CheckResult::CheckResult(CheckResult&&) = default;
+CheckResult& CheckResult::operator=(CheckResult&&) = default;
+
+// PairingSession struct out-of-line definitions
+Allow2Service::PairingSession::PairingSession() = default;
+Allow2Service::PairingSession::~PairingSession() = default;
+Allow2Service::PairingSession::PairingSession(const PairingSession&) = default;
+Allow2Service::PairingSession& Allow2Service::PairingSession::operator=(const PairingSession&) = default;
+Allow2Service::PairingSession::PairingSession(PairingSession&&) = default;
+Allow2Service::PairingSession& Allow2Service::PairingSession::operator=(PairingSession&&) = default;
 
 Allow2Service::Allow2Service(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -155,7 +180,10 @@ void Allow2Service::InitQRPairing(const std::string& device_name,
             if (response.success) {
               PairingSession session;
               session.session_id = response.session_id;
-              session.qr_code_url = response.qr_code_url;
+              // Generate Universal Link URL for QR code (enables iOS/Android deep linking)
+              session.web_pairing_url = "https://app.allow2.com/pair?sessionId=" +
+                  response.session_id + "&deviceName=Brave%20Browser";
+              session.qr_code_data = response.qr_code_url;  // QR code image data
               session.pin_code = "";  // QR pairing doesn't use PIN
               std::move(callback).Run(true, session, "");
             } else {
@@ -193,7 +221,11 @@ void Allow2Service::InitPINPairing(const std::string& device_name,
             if (response.success) {
               PairingSession session;
               session.session_id = response.session_id;
-              session.qr_code_url = "";  // PIN pairing doesn't use QR
+              // Generate Universal Link URL (enables iOS/Android deep linking)
+              session.web_pairing_url = "https://app.allow2.com/pair?sessionId=" +
+                  response.session_id + "&pin=" + response.pin_code +
+                  "&deviceName=Brave%20Browser";
+              session.qr_code_data = "";  // PIN pairing: no pre-generated QR
               session.pin_code = response.pin_code;
               std::move(callback).Run(true, session, "");
             } else {
@@ -275,7 +307,8 @@ std::vector<Child> Allow2Service::GetChildren() const {
     return children;
   }
 
-  auto parsed = base::JSONReader::Read(children_json);
+  auto parsed = base::JSONReader::Read(children_json,
+                                        base::JSON_ALLOW_TRAILING_COMMAS);
   if (!parsed || !parsed->is_list()) {
     return children;
   }
@@ -437,8 +470,8 @@ void Allow2Service::TrackUrl(const std::string& url) {
   }
 
   // Categorize URL and trigger check with appropriate activity
-  ActivityId activity = CategorizeUrl(url);
-  // The check will log the activity
+  [[maybe_unused]] ActivityId activity = CategorizeUrl(url);
+  // TODO(allow2): Pass activity to CheckAllowance when API supports it
   CheckAllowance(base::DoNothing());
 }
 
@@ -864,8 +897,10 @@ void Allow2Service::NotifyRemainingTimeUpdated(int remaining_seconds) {
   }
 }
 
-void Allow2Service::NotifyWarningThreshold(int remaining_seconds) {
+void Allow2Service::NotifyWarningThreshold(WarningLevel level,
+                                            int remaining_seconds) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  last_warning_level_ = level;
   for (auto& observer : observers_) {
     observer.OnWarningThresholdReached(remaining_seconds);
   }
@@ -907,7 +942,7 @@ std::optional<CheckResult> Allow2Service::LoadCachedCheckResult() const {
     return std::nullopt;
   }
 
-  auto parsed = base::JSONReader::Read(json);
+  auto parsed = base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!parsed || !parsed->is_dict()) {
     return std::nullopt;
   }

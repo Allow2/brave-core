@@ -155,7 +155,6 @@ Allow2BlockView::Allow2BlockView(Browser* browser,
           base::BindRepeating(&Allow2BlockView::OnRequestTimeClicked,
                               base::Unretained(this)),
           u"Request More Time"));
-  request_time_button_->SetProminent(true);
   request_time_button_->SetStyle(ui::ButtonStyle::kProminent);
 
   // "Switch User" button.

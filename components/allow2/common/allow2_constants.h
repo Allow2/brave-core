@@ -149,8 +149,28 @@ inline constexpr char kStatusError[] = "error";
 // Device Token Generation
 // ============================================================================
 
-// Prefix for generated device tokens
+// Prefix for generated device tokens (unique instance identifier)
 inline constexpr char kDeviceTokenPrefix[] = "BRAVE_DESKTOP_";
+
+// ============================================================================
+// Allow2 Version ID and Token (Registered App)
+// ============================================================================
+//
+// Single VID/Token pair for all Brave Browser builds (all platforms).
+// The platform is reported separately in API requests.
+//
+// Version ID: 21335
+// Token: tx0hzvvgleEJ2uHZ
+
+inline constexpr uint32_t kAllow2VersionId = 21335;
+inline constexpr char kAllow2VersionToken[] = "tx0hzvvgleEJ2uHZ";
+
+// Platform identifiers reported to Allow2 API
+inline constexpr char kAllow2PlatformWindows[] = "windows";
+inline constexpr char kAllow2PlatformMacOS[] = "macos";
+inline constexpr char kAllow2PlatformLinux[] = "linux";
+inline constexpr char kAllow2PlatformiOS[] = "ios";
+inline constexpr char kAllow2PlatformAndroid[] = "android";
 
 // ============================================================================
 // Domain Categories (for enhanced activity tracking)

@@ -7,15 +7,17 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <memory>
 
-#include "base/guid.h"
-#include "base/i18n/time_formatting.h"
+#include "base/uuid.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "brave/components/allow2/common/pref_names.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "crypto/sha2.h"
+#include "third_party/icu/source/common/unicode/unistr.h"
+#include "third_party/icu/source/i18n/unicode/timezone.h"
 #include "url/gurl.h"
 
 namespace allow2 {
@@ -73,7 +75,8 @@ std::string GetCurrentChildId(PrefService* profile_prefs) {
 
 std::string GenerateDeviceToken() {
   // Generate a unique device token with Brave prefix
-  return std::string(kDeviceTokenPrefix) + base::GenerateGUID();
+  return std::string(kDeviceTokenPrefix) +
+         base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 ActivityId CategorizeUrl(const std::string& url_string) {
@@ -82,7 +85,7 @@ ActivityId CategorizeUrl(const std::string& url_string) {
     return ActivityId::kInternet;
   }
 
-  std::string host = url.host();
+  std::string host(url.host());
 
   // Remove www. prefix if present
   if (base::StartsWith(host, "www.", base::CompareCase::INSENSITIVE_ASCII)) {
@@ -157,13 +160,20 @@ bool ValidatePinHash(const std::string& entered_pin,
 }
 
 std::string GetCurrentTimezone() {
-  // Use ICU to get the current timezone
-  // This returns IANA timezone identifiers like "Australia/Sydney"
-  std::u16string timezone_id;
-  if (base::GetCurrentTimezoneId(&timezone_id)) {
-    return base::UTF16ToUTF8(timezone_id);
-  }
-  return "UTC";
+  // Get the system's default timezone using ICU.
+  // This is critical for time-based parental controls (bedtime, school hours)
+  // to work correctly regardless of the device's location.
+  std::unique_ptr<icu::TimeZone> zone(icu::TimeZone::createDefault());
+  icu::UnicodeString id;
+  zone->getID(id);
+
+  // Convert ICU UnicodeString to std::string
+  std::string timezone_id;
+  id.toUTF8String(timezone_id);
+
+  // Return the timezone ID (e.g., "America/New_York", "Europe/London")
+  // If somehow empty, fall back to UTC
+  return timezone_id.empty() ? "UTC" : timezone_id;
 }
 
 // ============================================================================

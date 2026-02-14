@@ -75,7 +75,7 @@ content::BrowserContext* Allow2ServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
   // Use the original profile, not incognito.
   // Allow2 tracking applies to the main profile only.
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return GetBrowserContextRedirectedInIncognito(context);
 }
 
 void Allow2ServiceFactory::RegisterProfilePrefs(

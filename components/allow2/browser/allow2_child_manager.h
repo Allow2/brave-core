@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/functional/callback_forward.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
@@ -21,6 +21,13 @@ namespace allow2 {
 
 // Represents a child account with PIN information.
 struct ChildInfo {
+  ChildInfo();
+  ~ChildInfo();
+  ChildInfo(const ChildInfo&);
+  ChildInfo& operator=(const ChildInfo&);
+  ChildInfo(ChildInfo&&);
+  ChildInfo& operator=(ChildInfo&&);
+
   uint64_t id = 0;
   std::string name;
   std::string pin_hash;

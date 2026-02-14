@@ -1,0 +1,243 @@
+<style include="cr-shared-style settings-shared md-select">
+  :host {
+    display: block;
+  }
+
+  .allow2-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .allow2-logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  .allow2-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--cr-primary-text-color);
+  }
+
+  .benefits-section {
+    padding: 24px;
+    background: var(--cr-card-background-color);
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+
+  .benefits-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--cr-primary-text-color);
+  }
+
+  .benefits-list {
+    margin: 0;
+    padding: 0 0 0 20px;
+  }
+
+  .benefits-list li {
+    margin-bottom: 12px;
+    color: var(--cr-secondary-text-color);
+    line-height: 1.5;
+  }
+
+  .action-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 0 24px 24px 24px;
+    margin-top: 8px;
+  }
+
+  .learn-more-link {
+    color: var(--cr-link-color);
+    text-decoration: none;
+    font-size: 14px;
+  }
+
+  .learn-more-link:hover {
+    text-decoration: underline;
+  }
+
+  .paired-section {
+    padding: 24px;
+    background: var(--cr-card-background-color);
+    border-radius: 12px;
+  }
+
+  .paired-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #4caf50;
+  }
+
+  .status-text {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--cr-primary-text-color);
+  }
+
+  .paired-message {
+    color: var(--cr-secondary-text-color);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .paired-links {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  /* Pairing dialog styles */
+  .pairing-dialog {
+    padding: 24px;
+    background: var(--cr-card-background-color);
+    border-radius: 12px;
+    text-align: center;
+  }
+
+  .qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    margin: 16px 0;
+  }
+
+  .pin-code {
+    font-size: 28px;
+    font-weight: bold;
+    letter-spacing: 8px;
+    font-family: monospace;
+    margin: 16px 0;
+    padding: 12px 24px;
+    background: var(--cr-active-background-color);
+    border-radius: 8px;
+  }
+
+  .pairing-instructions {
+    color: var(--cr-secondary-text-color);
+    font-size: 14px;
+    margin: 8px 0;
+  }
+
+  .button-row {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
+  }
+</style>
+
+<settings-section
+  page-title="$i18n{braveParentalFreedom}">
+
+  <!-- Not Paired State: Show Benefits and Pair Button -->
+  <template is="dom-if" if="[[!isPaired_]]">
+    <template is="dom-if" if="[[!pairingSession_]]">
+      <div class="benefits-section">
+        <div class="benefits-title">Empower Your Family with Allow2</div>
+        <ul class="benefits-list">
+          <li><strong>Cross-platform control</strong> - Works on all devices: Windows, macOS, Linux, iOS, and Android</li>
+          <li><strong>Real-time management</strong> - Approve or deny time requests instantly from your phone</li>
+          <li><strong>Shared device support</strong> - Each family member gets their own profile with PIN protection</li>
+          <li><strong>Trust-based approach</strong> - Children learn time management, not just restrictions</li>
+          <li><strong>No surveillance</strong> - Transparent controls without hidden tracking</li>
+        </ul>
+      </div>
+
+      <div class="action-section">
+        <a href="https://www.allow2.com" target="_blank" rel="noopener" class="learn-more-link">
+          Learn more about Allow2 Parental Freedom →
+        </a>
+        <cr-button class="action-button" on-click="onStartPairing_">
+          Pair with Allow2
+        </cr-button>
+      </div>
+    </template>
+
+    <!-- Pairing in Progress -->
+    <template is="dom-if" if="[[pairingSession_]]">
+      <div class="pairing-dialog">
+        <div class="benefits-title">Pair This Device</div>
+
+        <div class="benefits-section" style="text-align: left; margin-bottom: 24px;">
+          <ul class="benefits-list">
+            <li><strong>Easy setup</strong> - Pair in seconds using your phone or the web</li>
+            <li><strong>Instant control</strong> - Manage all devices from the Allow2 app</li>
+            <li><strong>Secure</strong> - PIN-protected, no passwords stored on device</li>
+          </ul>
+        </div>
+
+        <div class="pairing-instructions">
+          <strong>Option 1:</strong> Scan with the Allow2 app on your phone
+        </div>
+
+        <div class="qr-container">
+          <img id="qrCodeImage" alt="QR Code for pairing" style="max-width: 200px;">
+          <div class="pairing-instructions" style="margin-top: 16px;">Or enter this PIN in the app:</div>
+          <div class="pin-code">[[pairingSession_.pinCode]]</div>
+        </div>
+
+        <div class="pairing-instructions" style="margin-top: 24px;">
+          <strong>Option 2:</strong> Pair using your web browser
+        </div>
+        <div class="pairing-instructions">
+          <a id="webPairingLink" href$="[[getWebPairingUrl_(pairingSession_)]]" target="_blank" rel="noopener" class="learn-more-link">
+            Open Allow2 Web Portal to pair →
+          </a>
+        </div>
+
+        <div class="pairing-instructions" style="margin-top: 24px; font-style: italic;">
+          Waiting for parent approval...
+        </div>
+
+        <div class="button-row">
+          <cr-button on-click="onCancelPairing_">
+            Cancel
+          </cr-button>
+        </div>
+      </div>
+    </template>
+  </template>
+
+  <!-- Paired State: Show Status and Management Info -->
+  <template is="dom-if" if="[[isPaired_]]">
+    <div class="paired-section">
+      <div class="paired-status">
+        <div class="status-indicator"></div>
+        <span class="status-text">Paired with Allow2</span>
+      </div>
+
+      <div class="paired-message">
+        This device is connected to your Allow2 family account. All parental controls,
+        time limits, and restrictions are managed through the Allow2 platform and mobile apps.
+      </div>
+
+      <div class="paired-links">
+        <a href="https://app.allow2.com" target="_blank" rel="noopener" class="learn-more-link">
+          Manage Settings in Allow2 →
+        </a>
+        <a href="https://www.allow2.com/apps" target="_blank" rel="noopener" class="learn-more-link">
+          Get the Allow2 App →
+        </a>
+      </div>
+    </div>
+  </template>
+
+</settings-section>

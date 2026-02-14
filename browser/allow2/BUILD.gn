@@ -6,7 +6,8 @@
 import("//brave/build/config.gni")
 import("//build/config/features.gni")
 
-source_set("allow2") {
+# Core target with factory - no views dependency, safe for //brave/browser/ui
+source_set("core") {
   sources = [
     "allow2_service_factory.cc",
     "allow2_service_factory.h",
@@ -14,13 +15,15 @@ source_set("allow2") {
     "allow2_tab_helper.h",
   ]
 
-  deps = [
-    "//base",
+  public_deps = [
     "//brave/components/allow2/browser",
     "//brave/components/allow2/common",
+  ]
+
+  deps = [
+    "//base",
     "//chrome/browser:browser_process",
     "//chrome/browser/profiles:profile",
-    "//chrome/browser/ui",
     "//components/keyed_service/content",
     "//components/keyed_service/core",
     "//components/pref_registry",
@@ -29,9 +32,25 @@ source_set("allow2") {
     "//services/network/public/cpp",
     "//url",
   ]
+}
 
+# Full target including views-dependent code
+# NOTE: Do not depend on this from //brave/browser/ui - use :core instead
+source_set("allow2") {
+  public_deps = [ ":core" ]
+
+  deps = []
+
+  # Desktop Views delegate for block overlay UI.
   if (toolkit_views) {
-    deps += [ "//brave/browser/ui/views/allow2" ]
+    sources = [
+      "allow2_block_view_delegate.cc",
+      "allow2_block_view_delegate.h",
+    ]
+    deps += [
+      "//chrome/browser/ui",
+      "//brave/browser/ui/views/allow2",
+    ]
   }
 
   if (is_android) {

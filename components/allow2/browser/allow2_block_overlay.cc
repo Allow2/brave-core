@@ -11,6 +11,12 @@
 
 namespace allow2 {
 
+BlockOverlayConfig::BlockOverlayConfig() = default;
+BlockOverlayConfig::~BlockOverlayConfig() = default;
+BlockOverlayConfig::BlockOverlayConfig(const BlockOverlayConfig&) = default;
+BlockOverlayConfig& BlockOverlayConfig::operator=(const BlockOverlayConfig&) =
+    default;
+
 Allow2BlockOverlay::Allow2BlockOverlay() = default;
 
 Allow2BlockOverlay::~Allow2BlockOverlay() = default;
@@ -23,6 +29,14 @@ void Allow2BlockOverlay::RemoveObserver(Allow2BlockOverlayObserver* observer) {
   observers_.RemoveObserver(observer);
 }
 
+void Allow2BlockOverlay::SetDelegate(Allow2BlockOverlayDelegate* delegate) {
+  delegate_ = delegate;
+}
+
+Allow2BlockOverlayDelegate* Allow2BlockOverlay::GetDelegate() const {
+  return delegate_;
+}
+
 void Allow2BlockOverlay::Show(const BlockOverlayConfig& config) {
   config_ = config;
   is_visible_ = true;
@@ -30,6 +44,11 @@ void Allow2BlockOverlay::Show(const BlockOverlayConfig& config) {
 
   VLOG(1) << "Allow2: Block overlay shown, reason: "
           << static_cast<int>(config.reason);
+
+  // Use platform-specific delegate to show the actual UI.
+  if (delegate_) {
+    delegate_->ShowBlockOverlay(config);
+  }
 }
 
 void Allow2BlockOverlay::Dismiss() {
@@ -42,12 +61,21 @@ void Allow2BlockOverlay::Dismiss() {
 
   VLOG(1) << "Allow2: Block overlay dismissed";
 
+  // Use platform-specific delegate to dismiss the actual UI.
+  if (delegate_) {
+    delegate_->DismissBlockOverlay();
+  }
+
   for (auto& observer : observers_) {
     observer.OnOverlayDismissed();
   }
 }
 
 bool Allow2BlockOverlay::IsVisible() const {
+  // If we have a delegate, check its actual UI state.
+  if (delegate_) {
+    return delegate_->IsBlockOverlayVisible();
+  }
   return is_visible_;
 }
 

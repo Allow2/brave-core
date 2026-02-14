@@ -6,6 +6,7 @@
 #include "brave/components/allow2/browser/allow2_api_client.h"
 
 #include <cstdlib>
+#include <optional>
 #include <utility>
 
 #include "base/json/json_reader.h"
@@ -13,8 +14,10 @@
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "brave/components/allow2/browser/allow2_credential_manager.h"
+#include "brave/components/allow2/browser/allow2_qr_code_generator.h"
 #include "brave/components/allow2/common/allow2_constants.h"
 #include "brave/components/allow2/common/allow2_utils.h"
+#include "build/build_config.h"
 #include "net/base/load_flags.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -24,7 +27,40 @@
 
 namespace allow2 {
 
+// InitPairingResponse struct out-of-line definitions
+InitPairingResponse::InitPairingResponse() = default;
+InitPairingResponse::~InitPairingResponse() = default;
+InitPairingResponse::InitPairingResponse(const InitPairingResponse&) = default;
+InitPairingResponse& InitPairingResponse::operator=(const InitPairingResponse&) = default;
+InitPairingResponse::InitPairingResponse(InitPairingResponse&&) = default;
+InitPairingResponse& InitPairingResponse::operator=(InitPairingResponse&&) = default;
+
+// PairingStatusResponse struct out-of-line definitions
+PairingStatusResponse::PairingStatusResponse() = default;
+PairingStatusResponse::~PairingStatusResponse() = default;
+PairingStatusResponse::PairingStatusResponse(const PairingStatusResponse&) = default;
+PairingStatusResponse& PairingStatusResponse::operator=(const PairingStatusResponse&) = default;
+PairingStatusResponse::PairingStatusResponse(PairingStatusResponse&&) = default;
+PairingStatusResponse& PairingStatusResponse::operator=(PairingStatusResponse&&) = default;
+
 namespace {
+
+// Returns the platform identifier for Allow2 API requests.
+const char* GetPlatformIdentifier() {
+#if BUILDFLAG(IS_WIN)
+  return kAllow2PlatformWindows;
+#elif BUILDFLAG(IS_MAC)
+  return kAllow2PlatformMacOS;
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  return kAllow2PlatformLinux;
+#elif BUILDFLAG(IS_IOS)
+  return kAllow2PlatformiOS;
+#elif BUILDFLAG(IS_ANDROID)
+  return kAllow2PlatformAndroid;
+#else
+  return "unknown";
+#endif
+}
 
 constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("allow2_api", R"(
@@ -62,9 +98,9 @@ std::unique_ptr<network::SimpleURLLoader> CreateLoader(
   auto request = std::make_unique<network::ResourceRequest>();
   request->url = url;
   request->method = method;
-  request->load_flags = net::LOAD_DO_NOT_SEND_COOKIES |
-                        net::LOAD_DO_NOT_SAVE_COOKIES |
+  request->load_flags = net::LOAD_DO_NOT_SAVE_COOKIES |
                         net::LOAD_BYPASS_CACHE;
+  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
 
   auto loader =
       network::SimpleURLLoader::Create(std::move(request), kTrafficAnnotation);
@@ -87,19 +123,23 @@ Allow2ApiClient::Allow2ApiClient(
 Allow2ApiClient::~Allow2ApiClient() = default;
 
 std::string Allow2ApiClient::GetBaseUrl() const {
-  const char* override_url = std::getenv("ALLOW2_API_URL");
+  // Check for environment variable override (staging/development)
+  const char* override_url = std::getenv(kAllow2BaseUrlEnvVar);
   if (override_url && override_url[0] != '\0') {
+    LOG(INFO) << "Allow2: Using override API URL: " << override_url;
     return std::string(override_url);
   }
-  return std::string(kAllow2ApiBaseUrl);
+  LOG(INFO) << "Allow2: Using default API URL: " << kAllow2DefaultApiBaseUrl;
+  return std::string(kAllow2DefaultApiBaseUrl);
 }
 
 std::string Allow2ApiClient::GetServiceBaseUrl() const {
-  const char* override_url = std::getenv("ALLOW2_API_URL");
+  // Check for environment variable override (staging/development)
+  const char* override_url = std::getenv(kAllow2BaseUrlEnvVar);
   if (override_url && override_url[0] != '\0') {
     return std::string(override_url);
   }
-  return std::string(kAllow2ServiceBaseUrl);
+  return std::string(kAllow2DefaultServiceBaseUrl);
 }
 
 std::string Allow2ApiClient::BuildUrl(const std::string& endpoint) const {
@@ -108,43 +148,6 @@ std::string Allow2ApiClient::BuildUrl(const std::string& endpoint) const {
 
 std::string Allow2ApiClient::BuildServiceUrl(const std::string& endpoint) const {
   return GetServiceBaseUrl() + endpoint;
-}
-
-void Allow2ApiClient::PairDevice(const std::string& email,
-                                  const std::string& password,
-                                  const std::string& device_token,
-                                  const std::string& device_name,
-                                  PairCallback callback) {
-  base::Value::Dict body;
-  body.Set(kPairUserKey, email);
-  body.Set(kPairPasswordKey, password);
-  body.Set(kPairDeviceTokenKey, device_token);
-  body.Set(kPairDeviceNameKey, device_name);
-
-  std::string body_json;
-  base::JSONWriter::Write(body, &body_json);
-
-  GURL url(BuildUrl(kAllow2PairDeviceEndpoint));
-  auto loader = CreateLoader(url, "POST", body_json);
-
-  auto* loader_ptr = loader.get();
-  loader_ptr->DownloadToString(
-      url_loader_factory_.get(),
-      base::BindOnce(&Allow2ApiClient::OnPairComplete,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(loader),
-                     std::move(callback)),
-      kMaxResponseSize);
-}
-
-void Allow2ApiClient::PairDeviceWithCode(const std::string& pairing_code,
-                                          const std::string& device_token,
-                                          const std::string& device_name,
-                                          PairCallback callback) {
-  // TODO: Implement pairing code endpoint when API supports it
-  PairResponse response;
-  response.success = false;
-  response.error = "Pairing code not yet supported";
-  std::move(callback).Run(response);
 }
 
 void Allow2ApiClient::Check(const Credentials& credentials,
@@ -157,6 +160,8 @@ void Allow2ApiClient::Check(const Credentials& credentials,
   body.Set(kCheckPairIdKey, credentials.pair_id);
   body.Set(kCheckChildIdKey, static_cast<int>(child_id));
   body.Set(kCheckTimezoneKey, GetCurrentTimezone());
+  body.Set("platform", GetPlatformIdentifier());
+  body.Set("vid", static_cast<int>(kAllow2VersionId));
 
   base::Value::List activities_list;
   for (const auto& activity : activities) {
@@ -195,6 +200,8 @@ void Allow2ApiClient::RequestTime(const Credentials& credentials,
   body.Set(kCheckChildIdKey, static_cast<int>(child_id));
   body.Set("activityId", static_cast<int>(activity_id));
   body.Set("minutes", minutes);
+  body.Set("platform", GetPlatformIdentifier());
+  body.Set("vid", static_cast<int>(kAllow2VersionId));
   if (!message.empty()) {
     body.Set("message", message);
   }
@@ -214,31 +221,16 @@ void Allow2ApiClient::RequestTime(const Credentials& credentials,
       kMaxResponseSize);
 }
 
-void Allow2ApiClient::OnPairComplete(
-    std::unique_ptr<network::SimpleURLLoader> loader,
-    PairCallback callback,
-    std::unique_ptr<std::string> response_body) {
-  if (!response_body || loader->NetError() != net::OK) {
-    PairResponse response;
-    response.success = false;
-    response.error = base::StringPrintf("Network error: %d", loader->NetError());
-    std::move(callback).Run(response);
-    return;
-  }
-
-  std::move(callback).Run(ParsePairResponse(*response_body));
-}
-
 void Allow2ApiClient::OnCheckComplete(
     std::unique_ptr<network::SimpleURLLoader> loader,
     CheckCallback callback,
-    std::unique_ptr<std::string> response_body) {
+    std::optional<std::string> response_body) {
   int http_status = 0;
   if (loader->ResponseInfo() && loader->ResponseInfo()->headers) {
     http_status = loader->ResponseInfo()->headers->response_code();
   }
 
-  if (!response_body || loader->NetError() != net::OK) {
+  if (!response_body.has_value() || loader->NetError() != net::OK) {
     CheckResponse response;
     response.success = false;
     response.http_status_code = http_status;
@@ -247,14 +239,14 @@ void Allow2ApiClient::OnCheckComplete(
     return;
   }
 
-  std::move(callback).Run(ParseCheckResponse(*response_body, http_status));
+  std::move(callback).Run(ParseCheckResponse(response_body.value(), http_status));
 }
 
 void Allow2ApiClient::OnRequestTimeComplete(
     std::unique_ptr<network::SimpleURLLoader> loader,
     RequestTimeCallback callback,
-    std::unique_ptr<std::string> response_body) {
-  if (!response_body || loader->NetError() != net::OK) {
+    std::optional<std::string> response_body) {
+  if (!response_body.has_value() || loader->NetError() != net::OK) {
     RequestTimeResponse response;
     response.success = false;
     response.error = base::StringPrintf("Network error: %d", loader->NetError());
@@ -262,70 +254,7 @@ void Allow2ApiClient::OnRequestTimeComplete(
     return;
   }
 
-  std::move(callback).Run(ParseRequestTimeResponse(*response_body));
-}
-
-PairResponse Allow2ApiClient::ParsePairResponse(const std::string& json) {
-  PairResponse response;
-
-  auto parsed = base::JSONReader::Read(json);
-  if (!parsed || !parsed->is_dict()) {
-    response.error = "Invalid JSON response";
-    return response;
-  }
-
-  const base::Value::Dict& dict = parsed->GetDict();
-
-  const std::string* status = dict.FindString(kPairStatusKey);
-  if (!status || *status != kStatusSuccess) {
-    response.error = status ? *status : "Unknown error";
-    return response;
-  }
-
-  const std::string* pair_id = dict.FindString(kPairIdKey);
-  const std::string* user_id = dict.FindString(kPairUserIdKey);
-
-  if (!pair_id || !user_id) {
-    response.error = "Missing required fields";
-    return response;
-  }
-
-  response.success = true;
-  response.pair_id = *pair_id;
-  response.user_id = *user_id;
-
-  // Parse children list
-  const base::Value::List* children = dict.FindList(kPairChildrenKey);
-  if (children) {
-    for (const auto& child_value : *children) {
-      if (!child_value.is_dict()) {
-        continue;
-      }
-
-      const base::Value::Dict& child_dict = child_value.GetDict();
-      Child child;
-      child.id = child_dict.FindInt(kChildIdKey).value_or(0);
-
-      const std::string* name = child_dict.FindString(kChildNameKey);
-      if (name) {
-        child.name = *name;
-      }
-
-      const std::string* pin_hash = child_dict.FindString(kChildPinHashKey);
-      if (pin_hash) {
-        child.pin_hash = *pin_hash;
-      }
-
-      const std::string* pin_salt = child_dict.FindString(kChildPinSaltKey);
-      if (pin_salt) {
-        child.pin_salt = *pin_salt;
-      }
-
-      response.children.push_back(child);
-    }
-  }
-
-  return response;
+  std::move(callback).Run(ParseRequestTimeResponse(response_body.value()));
 }
 
 CheckResponse Allow2ApiClient::ParseCheckResponse(const std::string& json,
@@ -338,7 +267,7 @@ CheckResponse Allow2ApiClient::ParseCheckResponse(const std::string& json,
     return response;
   }
 
-  auto parsed = base::JSONReader::Read(json);
+  auto parsed = base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!parsed || !parsed->is_dict()) {
     response.error = "Invalid JSON response";
     return response;
@@ -399,7 +328,7 @@ RequestTimeResponse Allow2ApiClient::ParseRequestTimeResponse(
     const std::string& json) {
   RequestTimeResponse response;
 
-  auto parsed = base::JSONReader::Read(json);
+  auto parsed = base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!parsed || !parsed->is_dict()) {
     response.error = "Invalid JSON response";
     return response;
@@ -431,10 +360,13 @@ void Allow2ApiClient::InitQRPairing(const std::string& device_token,
                                      const std::string& device_name,
                                      InitPairingCallback callback) {
   base::Value::Dict body;
+  // uuid is the unique device instance identifier (BRAVE_DESKTOP_xxx)
   body.Set("uuid", device_token);
   body.Set("name", device_name);
-  body.Set("platform", "desktop");
-  body.Set(kPairDeviceTokenKey, device_token);
+  body.Set("platform", GetPlatformIdentifier());
+  // deviceToken must be the registered Allow2 version token, not the device UUID
+  body.Set(kPairDeviceTokenKey, kAllow2VersionToken);
+  body.Set("vid", static_cast<int>(kAllow2VersionId));
 
   std::string body_json;
   base::JSONWriter::Write(body, &body_json);
@@ -457,10 +389,13 @@ void Allow2ApiClient::InitPINPairing(const std::string& device_token,
                                       const std::string& device_name,
                                       InitPairingCallback callback) {
   base::Value::Dict body;
+  // uuid is the unique device instance identifier (BRAVE_DESKTOP_xxx)
   body.Set("uuid", device_token);
   body.Set("name", device_name);
-  body.Set("platform", "desktop");
-  body.Set(kPairDeviceTokenKey, device_token);
+  body.Set("platform", GetPlatformIdentifier());
+  // deviceToken must be the registered Allow2 version token, not the device UUID
+  body.Set(kPairDeviceTokenKey, kAllow2VersionToken);
+  body.Set("vid", static_cast<int>(kAllow2VersionId));
 
   std::string body_json;
   base::JSONWriter::Write(body, &body_json);
@@ -508,7 +443,7 @@ void Allow2ApiClient::CancelPairing(const std::string& session_id) {
   auto* loader_ptr = loader.get();
   loader_ptr->DownloadToString(
       url_loader_factory_.get(),
-      base::BindOnce([](std::unique_ptr<std::string>) {}),  // Ignore result
+      base::BindOnce([](std::optional<std::string>) {}),  // Ignore result
       kMaxResponseSize);
 }
 
@@ -516,8 +451,8 @@ void Allow2ApiClient::OnInitPairingComplete(
     std::unique_ptr<network::SimpleURLLoader> loader,
     bool is_qr_pairing,
     InitPairingCallback callback,
-    std::unique_ptr<std::string> response_body) {
-  if (!response_body || loader->NetError() != net::OK) {
+    std::optional<std::string> response_body) {
+  if (!response_body.has_value() || loader->NetError() != net::OK) {
     InitPairingResponse response;
     response.success = false;
     response.error = base::StringPrintf("Network error: %d", loader->NetError());
@@ -525,14 +460,14 @@ void Allow2ApiClient::OnInitPairingComplete(
     return;
   }
 
-  std::move(callback).Run(ParseInitPairingResponse(*response_body, is_qr_pairing));
+  std::move(callback).Run(ParseInitPairingResponse(response_body.value(), is_qr_pairing));
 }
 
 void Allow2ApiClient::OnPairingStatusComplete(
     std::unique_ptr<network::SimpleURLLoader> loader,
     PairingStatusCallback callback,
-    std::unique_ptr<std::string> response_body) {
-  if (!response_body || loader->NetError() != net::OK) {
+    std::optional<std::string> response_body) {
+  if (!response_body.has_value() || loader->NetError() != net::OK) {
     PairingStatusResponse response;
     response.completed = false;
     response.error = base::StringPrintf("Network error: %d", loader->NetError());
@@ -540,7 +475,7 @@ void Allow2ApiClient::OnPairingStatusComplete(
     return;
   }
 
-  std::move(callback).Run(ParsePairingStatusResponse(*response_body));
+  std::move(callback).Run(ParsePairingStatusResponse(response_body.value()));
 }
 
 InitPairingResponse Allow2ApiClient::ParseInitPairingResponse(
@@ -548,7 +483,7 @@ InitPairingResponse Allow2ApiClient::ParseInitPairingResponse(
     bool is_qr_pairing) {
   InitPairingResponse response;
 
-  auto parsed = base::JSONReader::Read(json);
+  auto parsed = base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!parsed || !parsed->is_dict()) {
     response.error = "Invalid JSON response";
     return response;
@@ -558,7 +493,16 @@ InitPairingResponse Allow2ApiClient::ParseInitPairingResponse(
 
   const std::string* status = dict.FindString(kPairStatusKey);
   if (!status || *status != kStatusSuccess) {
-    response.error = status ? *status : "Unknown error";
+    // Check for error message in "message" or "error" field
+    const std::string* message = dict.FindString("message");
+    if (!message) {
+      message = dict.FindString("error");
+    }
+    if (!message) {
+      const std::string* code = dict.FindString("code");
+      message = code;
+    }
+    response.error = message ? *message : (status ? *status : "Unknown error");
     return response;
   }
 
@@ -570,9 +514,30 @@ InitPairingResponse Allow2ApiClient::ParseInitPairingResponse(
   }
 
   if (is_qr_pairing) {
-    const std::string* qr_url = dict.FindString("qrCodeUrl");
-    if (qr_url) {
-      response.qr_code_url = *qr_url;
+    // Server returns qrData: { url, deepLink, encodedData }
+    const base::Value::Dict* qr_data = dict.FindDict("qrData");
+    if (qr_data) {
+      const std::string* qr_url = qr_data->FindString("url");
+      if (qr_url) {
+        response.web_pairing_url = *qr_url;
+        // Generate QR code image from the URL
+        auto qr_image = GenerateQRCodeDataUrl(*qr_url);
+        if (qr_image.has_value()) {
+          response.qr_code_url = qr_image.value();
+        } else {
+          LOG(ERROR) << "Allow2: Failed to generate QR code image";
+        }
+      }
+    } else {
+      // Fallback: check for legacy qrCodeUrl field
+      const std::string* qr_url = dict.FindString("qrCodeUrl");
+      if (qr_url) {
+        response.web_pairing_url = *qr_url;
+        auto qr_image = GenerateQRCodeDataUrl(*qr_url);
+        if (qr_image.has_value()) {
+          response.qr_code_url = qr_image.value();
+        }
+      }
     }
   } else {
     const std::string* pin = dict.FindString("pin");
@@ -590,7 +555,7 @@ PairingStatusResponse Allow2ApiClient::ParsePairingStatusResponse(
     const std::string& json) {
   PairingStatusResponse response;
 
-  auto parsed = base::JSONReader::Read(json);
+  auto parsed = base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!parsed || !parsed->is_dict()) {
     response.error = "Invalid JSON response";
     return response;

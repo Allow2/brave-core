@@ -21,6 +21,7 @@
 #include "base/values.h"
 #include "brave/components/allow2/browser/allow2_child_shield.h"
 #include "brave/components/allow2/browser/allow2_usage_tracker.h"
+#include "brave/components/allow2/browser/allow2_warning_controller.h"
 #include "brave/components/allow2/common/allow2_constants.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -44,6 +45,13 @@ class Allow2WarningController;
 
 // Represents a child account.
 struct Child {
+  Child();
+  ~Child();
+  Child(const Child&);
+  Child& operator=(const Child&);
+  Child(Child&&);
+  Child& operator=(Child&&);
+
   uint64_t id = 0;
   std::string name;
   std::string pin_hash;
@@ -52,6 +60,13 @@ struct Child {
 
 // Represents the result of an Allow2 check.
 struct CheckResult {
+  CheckResult();
+  ~CheckResult();
+  CheckResult(const CheckResult&);
+  CheckResult& operator=(const CheckResult&);
+  CheckResult(CheckResult&&);
+  CheckResult& operator=(CheckResult&&);
+
   bool allowed = true;
   int remaining_seconds = 0;
   int64_t expires = 0;
@@ -128,9 +143,17 @@ class Allow2Service : public KeyedService,
 
   // Represents a pairing session initiated by this device.
   struct PairingSession {
+    PairingSession();
+    ~PairingSession();
+    PairingSession(const PairingSession&);
+    PairingSession& operator=(const PairingSession&);
+    PairingSession(PairingSession&&);
+    PairingSession& operator=(PairingSession&&);
+
     std::string session_id;
-    std::string qr_code_url;  // URL to display as QR code
-    std::string pin_code;     // 6-digit PIN for manual entry
+    std::string qr_code_data;      // Base64-encoded QR code image
+    std::string web_pairing_url;   // Universal link URL (encoded in QR, enables deep linking)
+    std::string pin_code;          // 6-digit PIN for manual entry
   };
 
   using InitPairingCallback =
@@ -335,7 +358,7 @@ class Allow2Service : public KeyedService,
   void NotifyRemainingTimeUpdated(int remaining_seconds);
 
   // Notify observers of warning threshold.
-  void NotifyWarningThreshold(int remaining_seconds);
+  void NotifyWarningThreshold(WarningLevel level, int remaining_seconds);
 
   // Check if we should show a warning for the given remaining time.
   bool ShouldShowWarning(int remaining_seconds) const;
@@ -369,8 +392,8 @@ class Allow2Service : public KeyedService,
   std::string block_reason_;
   int remaining_seconds_ = 0;
 
-  // Last warning threshold that was notified.
-  int last_warning_threshold_ = 0;
+  // Last warning level that was notified.
+  WarningLevel last_warning_level_ = WarningLevel::kNone;
 
   // Observers.
   base::ObserverList<Allow2ServiceObserver> observers_;

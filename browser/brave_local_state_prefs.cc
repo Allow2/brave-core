@@ -36,6 +36,7 @@
 #include "brave/components/p3a/metric_log_store.h"
 #include "brave/components/p3a/p3a_service.h"
 #include "brave/components/p3a/rotation_scheduler.h"
+#include "brave/components/allow2/common/allow2_utils.h"
 #include "brave/components/skus/browser/skus_utils.h"
 #include "brave/components/speedreader/common/buildflags/buildflags.h"
 #include "brave/components/tor/buildflags/buildflags.h"
@@ -148,6 +149,7 @@ void RegisterLocalStatePrefsForMigration(PrefRegistrySimple* registry) {
 }
 
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
+  allow2::RegisterLocalStatePrefs(registry);
   brave_shields::RegisterPrefsForAdBlockService(registry);
   brave_stats::RegisterLocalStatePrefs(registry);
   brave_origin::RegisterLocalStatePrefs(registry);

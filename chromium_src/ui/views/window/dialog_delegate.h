@@ -28,6 +28,12 @@ class PlaylistActionDialog;
 class TextRecognitionDialogView;
 class ObsoleteSystemConfirmDialogView;
 
+namespace allow2 {
+class Allow2BlockView;
+class Allow2ChildSelectView;
+class Allow2PairingView;
+}  // namespace allow2
+
 namespace brave_vpn {
 class BraveVpnFallbackDialogView;
 class BraveVpnDnsSettingsNotificiationDialogView;
@@ -40,6 +46,9 @@ class BraveVpnDnsSettingsNotificiationDialogView;
   friend class ::PlaylistActionDialog;                                \
   friend class ::TextRecognitionDialogView;                           \
   friend class ::ObsoleteSystemConfirmDialogView;                     \
+  friend class allow2::Allow2BlockView;                               \
+  friend class allow2::Allow2ChildSelectView;                         \
+  friend class allow2::Allow2PairingView;                             \
   friend class brave_vpn::BraveVpnFallbackDialogView;                 \
   friend class brave_vpn::BraveVpnDnsSettingsNotificiationDialogView; \
   static DdvPassKey CreatePassKey
