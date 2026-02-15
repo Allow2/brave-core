@@ -41,6 +41,39 @@ struct RequestTimeResponse {
   std::string request_id;
 };
 
+// Response from child auth request API.
+struct ChildAuthRequestResponse {
+  ChildAuthRequestResponse();
+  ~ChildAuthRequestResponse();
+  ChildAuthRequestResponse(const ChildAuthRequestResponse&);
+  ChildAuthRequestResponse& operator=(const ChildAuthRequestResponse&);
+  ChildAuthRequestResponse(ChildAuthRequestResponse&&);
+  ChildAuthRequestResponse& operator=(ChildAuthRequestResponse&&);
+
+  bool success = false;
+  std::string error;
+  std::string request_id;
+  std::string method;  // "push", "socket", etc.
+  int expires_in = 60;
+};
+
+// Response from child auth status API.
+struct ChildAuthStatusResponse {
+  ChildAuthStatusResponse();
+  ~ChildAuthStatusResponse();
+  ChildAuthStatusResponse(const ChildAuthStatusResponse&);
+  ChildAuthStatusResponse& operator=(const ChildAuthStatusResponse&);
+  ChildAuthStatusResponse(ChildAuthStatusResponse&&);
+  ChildAuthStatusResponse& operator=(ChildAuthStatusResponse&&);
+
+  bool success = false;
+  std::string error;
+  std::string status;  // "pending", "confirmed", "denied", "expired"
+  uint64_t child_id = 0;
+  std::string child_name;
+  int expires_in = 0;
+};
+
 // Response from QR/PIN pairing initialization.
 struct InitPairingResponse {
   InitPairingResponse();
@@ -89,6 +122,10 @@ class Allow2ApiClient {
       base::OnceCallback<void(const InitPairingResponse& response)>;
   using PairingStatusCallback =
       base::OnceCallback<void(const PairingStatusResponse& response)>;
+  using ChildAuthRequestCallback =
+      base::OnceCallback<void(const ChildAuthRequestResponse& response)>;
+  using ChildAuthStatusCallback =
+      base::OnceCallback<void(const ChildAuthStatusResponse& response)>;
 
   explicit Allow2ApiClient(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
@@ -136,6 +173,28 @@ class Allow2ApiClient {
   // Cancel an active pairing session.
   void CancelPairing(const std::string& session_id);
 
+  // ============================================================================
+  // Child Authentication (Push/Socket/Watch)
+  // ============================================================================
+
+  // Request child authentication via push notification.
+  // Called when a child with hasAccount=true taps their name on the shield.
+  // Server sends push notification to the child's phone/watch.
+  void RequestChildAuth(const Credentials& credentials,
+                        uint64_t child_id,
+                        const std::string& device_uuid,
+                        const std::string& device_name,
+                        ChildAuthRequestCallback callback);
+
+  // Check status of child auth request (poll until confirmed/denied/expired).
+  void CheckChildAuthStatus(const Credentials& credentials,
+                            const std::string& request_id,
+                            ChildAuthStatusCallback callback);
+
+  // Cancel a child auth request.
+  void CancelChildAuth(const Credentials& credentials,
+                       const std::string& request_id);
+
  private:
   // URL loader completion handlers.
   void OnCheckComplete(std::unique_ptr<network::SimpleURLLoader> loader,
@@ -155,12 +214,24 @@ class Allow2ApiClient {
                                PairingStatusCallback callback,
                                std::optional<std::string> response_body);
 
+  void OnChildAuthRequestComplete(
+      std::unique_ptr<network::SimpleURLLoader> loader,
+      ChildAuthRequestCallback callback,
+      std::optional<std::string> response_body);
+
+  void OnChildAuthStatusComplete(
+      std::unique_ptr<network::SimpleURLLoader> loader,
+      ChildAuthStatusCallback callback,
+      std::optional<std::string> response_body);
+
   // Parse API responses.
   CheckResponse ParseCheckResponse(const std::string& json, int http_status);
   RequestTimeResponse ParseRequestTimeResponse(const std::string& json);
   InitPairingResponse ParseInitPairingResponse(const std::string& json,
                                                bool is_qr_pairing);
   PairingStatusResponse ParsePairingStatusResponse(const std::string& json);
+  ChildAuthRequestResponse ParseChildAuthRequestResponse(const std::string& json);
+  ChildAuthStatusResponse ParseChildAuthStatusResponse(const std::string& json);
 
   // Get base URLs (checks for env override).
   std::string GetBaseUrl() const;

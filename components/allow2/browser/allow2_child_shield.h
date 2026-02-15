@@ -14,20 +14,31 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/time/time.h"
+#include "base/timer/timer.h"
+
+namespace network {
+class NetworkConnectionTracker;
+}  // namespace network
 
 namespace allow2 {
+
+class Allow2ApiClient;
 
 struct ChildInfo;
 class Allow2ChildManager;
 
 // Shield state for UI display.
 enum class ShieldState {
-  kHidden,            // Shield not visible
-  kSelectingChild,    // User is selecting which child they are
-  kEnteringPIN,       // User has selected child, entering PIN
-  kValidating,        // Validating PIN with server
-  kError,             // Showing error (wrong PIN, locked out)
-  kSuccess,           // PIN accepted, about to dismiss
+  kHidden,                    // Shield not visible
+  kSelectingChild,            // User is selecting which child they are
+  kEnteringPIN,               // User has selected child, entering PIN
+  kValidating,                // Validating PIN with server
+  kError,                     // Showing error (wrong PIN, locked out)
+  kSuccess,                   // PIN accepted, about to dismiss
+  kWaitingForConfirmation,    // Waiting for child to confirm via push/app
+  kConfirmationTimeout,       // Push auth timed out, showing fallback options
+  kConfirmationDenied,        // Child denied the auth request
 };
 
 // Observer interface for child shield events.
@@ -50,6 +61,20 @@ class Allow2ChildShieldObserver : public base::CheckedObserver {
 
   // Called when lockout starts.
   virtual void OnLockoutStarted(int lockout_seconds) {}
+
+  // Called when push auth request is sent and we're waiting for confirmation.
+  virtual void OnWaitingForConfirmation(uint64_t child_id,
+                                        const std::string& child_name) {}
+
+  // Called when push auth times out.
+  virtual void OnConfirmationTimeout(uint64_t child_id,
+                                     const std::string& child_name) {}
+
+  // Called when child denies the auth request.
+  virtual void OnConfirmationDenied(uint64_t child_id) {}
+
+  // Called when child confirms the auth request.
+  virtual void OnConfirmationAccepted(uint64_t child_id) {}
 
  protected:
   ~Allow2ChildShieldObserver() override = default;
@@ -101,8 +126,13 @@ class Allow2ChildShield {
   using SelectCallback =
       base::OnceCallback<void(bool success, const std::string& error)>;
 
-  explicit Allow2ChildShield(Allow2ChildManager* child_manager);
+  // Constructor with API client for push auth flow.
+  Allow2ChildShield(Allow2ChildManager* child_manager,
+                    Allow2ApiClient* api_client);
   ~Allow2ChildShield();
+
+  // Legacy constructor (without API client, push auth disabled).
+  explicit Allow2ChildShield(Allow2ChildManager* child_manager);
 
   Allow2ChildShield(const Allow2ChildShield&) = delete;
   Allow2ChildShield& operator=(const Allow2ChildShield&) = delete;
@@ -197,6 +227,36 @@ class Allow2ChildShield {
   // Skip child selection (if allowed).
   void Skip();
 
+  // ============================================================================
+  // Push Authentication (for children with hasAccount: true)
+  // ============================================================================
+
+  // Check if network is available.
+  bool IsNetworkAvailable() const;
+
+  // Set the network connection tracker for connectivity checks.
+  void SetNetworkConnectionTracker(
+      network::NetworkConnectionTracker* tracker);
+
+  // Request push authentication for a child with an account.
+  // Called internally when selecting a child with hasAccount=true.
+  void RequestPushAuth(uint64_t child_id);
+
+  // Cancel the current push auth request.
+  void CancelPushAuth();
+
+  // Fall back to PIN entry from push auth.
+  void FallbackToPIN();
+
+  // Get the current auth request ID (for status polling).
+  std::string GetCurrentAuthRequestId() const;
+
+  // Get seconds remaining until push auth timeout.
+  int GetPushAuthSecondsRemaining() const;
+
+  // Check if push auth is currently in progress.
+  bool IsPushAuthInProgress() const;
+
  private:
   // Set state and notify observers.
   void SetState(ShieldState state);
@@ -207,13 +267,49 @@ class Allow2ChildShield {
   // Find child by ID.
   std::optional<ChildInfo> FindChild(uint64_t child_id) const;
 
+  // ============================================================================
+  // Push Auth Internals
+  // ============================================================================
+
+  // Handle push auth request response.
+  void OnPushAuthRequestComplete(const std::string& request_id,
+                                  const std::string& error);
+
+  // Handle push auth status poll response.
+  void OnPushAuthStatusComplete(const std::string& status,
+                                 const std::string& error);
+
+  // Called when push auth timeout expires.
+  void OnPushAuthTimeout();
+
+  // Start polling for push auth status.
+  void StartPushAuthPolling();
+
+  // Stop polling for push auth status.
+  void StopPushAuthPolling();
+
+  // Poll for push auth status.
+  void PollPushAuthStatus();
+
   raw_ptr<Allow2ChildManager> child_manager_;
+  raw_ptr<Allow2ApiClient> api_client_ = nullptr;
+  raw_ptr<network::NetworkConnectionTracker> network_tracker_ = nullptr;
 
   ShieldState state_ = ShieldState::kHidden;
   ChildShieldConfig config_;
 
   uint64_t selected_child_id_ = 0;
   std::string current_error_;
+
+  // Push auth state.
+  std::string current_auth_request_id_;
+  base::Time push_auth_start_time_;
+  base::RepeatingTimer push_auth_poll_timer_;
+  base::OneShotTimer push_auth_timeout_timer_;
+
+  // Push auth constants.
+  static constexpr int kPushAuthTimeoutSeconds = 60;
+  static constexpr int kPushAuthPollIntervalMs = 2000;
 
   base::ObserverList<Allow2ChildShieldObserver> observers_;
   base::WeakPtrFactory<Allow2ChildShield> weak_ptr_factory_{this};

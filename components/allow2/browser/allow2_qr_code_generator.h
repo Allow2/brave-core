@@ -6,8 +6,10 @@
 #ifndef BRAVE_COMPONENTS_ALLOW2_BROWSER_ALLOW2_QR_CODE_GENERATOR_H_
 #define BRAVE_COMPONENTS_ALLOW2_BROWSER_ALLOW2_QR_CODE_GENERATOR_H_
 
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace allow2 {
 

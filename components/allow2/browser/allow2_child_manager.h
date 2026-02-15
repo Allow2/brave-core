@@ -33,6 +33,10 @@ struct ChildInfo {
   std::string pin_hash;
   std::string pin_salt;
   std::string avatar_url;  // Optional avatar URL
+
+  // True if child has their own Allow2 account (can use push authentication).
+  // False for "name-only" children who can only use PIN.
+  bool has_account = false;
 };
 
 // Observer interface for child selection changes.

@@ -184,7 +184,8 @@ void Allow2Service::InitQRPairing(const std::string& device_name,
               session.web_pairing_url = "https://app.allow2.com/pair?sessionId=" +
                   response.session_id + "&deviceName=Brave%20Browser";
               session.qr_code_data = response.qr_code_url;  // QR code image data
-              session.pin_code = "";  // QR pairing doesn't use PIN
+              // Server now returns PIN alongside QR data (combined mode)
+              session.pin_code = response.pin_code;
               std::move(callback).Run(true, session, "");
             } else {
               PairingSession empty_session;

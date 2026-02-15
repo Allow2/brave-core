@@ -22,9 +22,8 @@ std::optional<std::vector<uint8_t>> GenerateQRCodePNG(const std::string& data) {
     return std::nullopt;
   }
 
-  // Convert string to bytes
-  base::span<const uint8_t> input_data(
-      reinterpret_cast<const uint8_t*>(data.data()), data.size());
+  // Convert string to byte span using safe Chromium API
+  base::span<const uint8_t> input_data = base::as_byte_span(data);
 
   // Generate QR code bitmap using Chromium's built-in generator
   auto result = qr_code_generator::GenerateBitmap(

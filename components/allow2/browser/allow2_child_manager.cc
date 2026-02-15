@@ -277,6 +277,9 @@ void Allow2ChildManager::LoadChildrenFromPrefs() {
       child.avatar_url = *avatar_url;
     }
 
+    // Check if child has their own Allow2 account (can use push auth)
+    child.has_account = dict.FindBool("hasAccount").value_or(false);
+
     children_.push_back(child);
   }
 }
@@ -293,6 +296,7 @@ void Allow2ChildManager::SaveChildrenToPrefs() {
     if (!child.avatar_url.empty()) {
       child_dict.Set("avatarUrl", child.avatar_url);
     }
+    child_dict.Set("hasAccount", child.has_account);
     children_list.Append(std::move(child_dict));
   }
 

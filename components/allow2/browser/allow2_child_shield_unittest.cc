@@ -26,6 +26,16 @@ class MockObserver : public Allow2ChildShieldObserver {
   MOCK_METHOD(void, OnPINRejected, (const std::string& error), (override));
   MOCK_METHOD(void, OnShieldDismissed, (), (override));
   MOCK_METHOD(void, OnLockoutStarted, (int lockout_seconds), (override));
+  MOCK_METHOD(void,
+              OnWaitingForConfirmation,
+              (uint64_t child_id, const std::string& child_name),
+              (override));
+  MOCK_METHOD(void,
+              OnConfirmationTimeout,
+              (uint64_t child_id, const std::string& child_name),
+              (override));
+  MOCK_METHOD(void, OnConfirmationDenied, (uint64_t child_id), (override));
+  MOCK_METHOD(void, OnConfirmationAccepted, (uint64_t child_id), (override));
 };
 
 class Allow2ChildShieldTest : public testing::Test {
@@ -50,12 +60,14 @@ class Allow2ChildShieldTest : public testing::Test {
 
   ChildInfo CreateChild(uint64_t id,
                         const std::string& name,
-                        const std::string& pin) {
+                        const std::string& pin,
+                        bool has_account = false) {
     ChildInfo child;
     child.id = id;
     child.name = name;
     child.pin_salt = "testsalt";
     child.pin_hash = HashPin(pin, child.pin_salt);
+    child.has_account = has_account;
     return child;
   }
 
@@ -177,6 +189,112 @@ TEST_F(Allow2ChildShieldTest, ShowWithConfig) {
   EXPECT_TRUE(shield_->GetConfig().allow_guest);
   EXPECT_TRUE(shield_->GetConfig().show_skip_link);
   EXPECT_EQ("Custom Title", shield_->GetConfig().custom_title);
+}
+
+// ============================================================================
+// Push Authentication Flow Tests
+// ============================================================================
+
+// Test fixture for push auth tests with children who have accounts
+class Allow2ChildShieldPushAuthTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    RegisterProfilePrefs(pref_service_.registry());
+    child_manager_ = std::make_unique<Allow2ChildManager>(&pref_service_);
+    // Create shield without API client - push auth will fall back to PIN
+    shield_ = std::make_unique<Allow2ChildShield>(child_manager_.get());
+    shield_->AddObserver(&observer_);
+
+    // Add test children - one with account, one without
+    std::vector<ChildInfo> children = {
+        CreateChildWithAccount(1001, "Emma", "1234", true),   // Has account
+        CreateChildWithAccount(1002, "Jack", "5678", false),  // Name-only
+    };
+    child_manager_->UpdateChildList(children);
+  }
+
+  void TearDown() override {
+    shield_->RemoveObserver(&observer_);
+  }
+
+  ChildInfo CreateChildWithAccount(uint64_t id,
+                                   const std::string& name,
+                                   const std::string& pin,
+                                   bool has_account) {
+    ChildInfo child;
+    child.id = id;
+    child.name = name;
+    child.pin_salt = "testsalt";
+    child.pin_hash = HashPin(pin, child.pin_salt);
+    child.has_account = has_account;
+    return child;
+  }
+
+  base::test::TaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  TestingPrefServiceSimple pref_service_;
+  std::unique_ptr<Allow2ChildManager> child_manager_;
+  std::unique_ptr<Allow2ChildShield> shield_;
+  testing::StrictMock<MockObserver> observer_;
+};
+
+TEST_F(Allow2ChildShieldPushAuthTest, ChildWithAccountFallsToPINWithoutApiClient) {
+  // Without an API client, push auth should fall back to PIN even for
+  // children with accounts
+  EXPECT_CALL(observer_, OnShieldStateChanged(ShieldState::kSelectingChild));
+  shield_->Show();
+
+  EXPECT_CALL(observer_, OnChildSelected(1001));
+  // Should go straight to PIN since no API client
+  EXPECT_CALL(observer_, OnShieldStateChanged(ShieldState::kEnteringPIN));
+
+  shield_->SelectChild(1001);
+
+  EXPECT_EQ(ShieldState::kEnteringPIN, shield_->GetState());
+}
+
+TEST_F(Allow2ChildShieldPushAuthTest, ChildWithoutAccountGoesToPIN) {
+  // Child without account should always go to PIN entry
+  EXPECT_CALL(observer_, OnShieldStateChanged(ShieldState::kSelectingChild));
+  shield_->Show();
+
+  EXPECT_CALL(observer_, OnChildSelected(1002));
+  EXPECT_CALL(observer_, OnShieldStateChanged(ShieldState::kEnteringPIN));
+
+  shield_->SelectChild(1002);
+
+  EXPECT_EQ(ShieldState::kEnteringPIN, shield_->GetState());
+}
+
+TEST_F(Allow2ChildShieldPushAuthTest, FallbackToPIN) {
+  EXPECT_CALL(observer_, OnShieldStateChanged(ShieldState::kSelectingChild));
+  shield_->Show();
+
+  EXPECT_CALL(observer_, OnChildSelected(1001));
+  EXPECT_CALL(observer_, OnShieldStateChanged(ShieldState::kEnteringPIN));
+  shield_->SelectChild(1001);
+
+  // Should be in PIN entry state
+  EXPECT_EQ(ShieldState::kEnteringPIN, shield_->GetState());
+
+  // FallbackToPIN should keep us in PIN state
+  shield_->FallbackToPIN();
+  EXPECT_EQ(ShieldState::kEnteringPIN, shield_->GetState());
+}
+
+TEST_F(Allow2ChildShieldPushAuthTest, GetPushAuthSecondsRemainingNotInProgress) {
+  EXPECT_EQ(0, shield_->GetPushAuthSecondsRemaining());
+}
+
+TEST_F(Allow2ChildShieldPushAuthTest, IsPushAuthInProgressFalseInitially) {
+  EXPECT_FALSE(shield_->IsPushAuthInProgress());
+}
+
+TEST_F(Allow2ChildShieldPushAuthTest, HasAccountFlagIsPreserved) {
+  auto children = shield_->GetChildren();
+  EXPECT_EQ(2u, children.size());
+  EXPECT_TRUE(children[0].has_account);   // Emma
+  EXPECT_FALSE(children[1].has_account);  // Jack
 }
 
 }  // namespace

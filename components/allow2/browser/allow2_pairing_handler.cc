@@ -181,10 +181,16 @@ void Allow2PairingHandler::OnInitComplete(const InitPairingResponse& response) {
   if (mode_ == PairingMode::kQRCode) {
     qr_code_url_ = response.qr_code_url;
     web_pairing_url_ = response.web_pairing_url;
-    VLOG(1) << "Allow2: QR code ready, session: " << session_id_;
+    // Server now returns both QR code AND PIN for combined mode
+    pin_code_ = response.pin_code;
+    VLOG(1) << "Allow2: QR code and PIN ready, session: " << session_id_;
 
     for (auto& observer : observers_) {
       observer.OnQRCodeReady(qr_code_url_);
+      // Also notify PIN is ready (combined mode)
+      if (!pin_code_.empty()) {
+        observer.OnPINCodeReady(pin_code_);
+      }
     }
   } else {
     pin_code_ = response.pin_code;

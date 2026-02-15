@@ -132,6 +132,7 @@ inline constexpr char kChildIdKey[] = "id";
 inline constexpr char kChildNameKey[] = "name";
 inline constexpr char kChildPinHashKey[] = "pinHash";
 inline constexpr char kChildPinSaltKey[] = "pinSalt";
+inline constexpr char kChildHasAccountKey[] = "hasAccount";
 
 // Activity object keys
 inline constexpr char kActivityIdKey[] = "id";

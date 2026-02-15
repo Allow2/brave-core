@@ -43,6 +43,22 @@ PairingStatusResponse& PairingStatusResponse::operator=(const PairingStatusRespo
 PairingStatusResponse::PairingStatusResponse(PairingStatusResponse&&) = default;
 PairingStatusResponse& PairingStatusResponse::operator=(PairingStatusResponse&&) = default;
 
+// ChildAuthRequestResponse struct out-of-line definitions
+ChildAuthRequestResponse::ChildAuthRequestResponse() = default;
+ChildAuthRequestResponse::~ChildAuthRequestResponse() = default;
+ChildAuthRequestResponse::ChildAuthRequestResponse(const ChildAuthRequestResponse&) = default;
+ChildAuthRequestResponse& ChildAuthRequestResponse::operator=(const ChildAuthRequestResponse&) = default;
+ChildAuthRequestResponse::ChildAuthRequestResponse(ChildAuthRequestResponse&&) = default;
+ChildAuthRequestResponse& ChildAuthRequestResponse::operator=(ChildAuthRequestResponse&&) = default;
+
+// ChildAuthStatusResponse struct out-of-line definitions
+ChildAuthStatusResponse::ChildAuthStatusResponse() = default;
+ChildAuthStatusResponse::~ChildAuthStatusResponse() = default;
+ChildAuthStatusResponse::ChildAuthStatusResponse(const ChildAuthStatusResponse&) = default;
+ChildAuthStatusResponse& ChildAuthStatusResponse::operator=(const ChildAuthStatusResponse&) = default;
+ChildAuthStatusResponse::ChildAuthStatusResponse(ChildAuthStatusResponse&&) = default;
+ChildAuthStatusResponse& ChildAuthStatusResponse::operator=(ChildAuthStatusResponse&&) = default;
+
 namespace {
 
 // Returns the platform identifier for Allow2 API requests.
@@ -94,13 +110,19 @@ constexpr size_t kMaxResponseSize = 1024 * 1024;  // 1MB
 std::unique_ptr<network::SimpleURLLoader> CreateLoader(
     const GURL& url,
     const std::string& method,
-    const std::string& body) {
+    const std::string& body,
+    const std::string& auth_token = "") {
   auto request = std::make_unique<network::ResourceRequest>();
   request->url = url;
   request->method = method;
   request->load_flags = net::LOAD_DO_NOT_SAVE_COOKIES |
                         net::LOAD_BYPASS_CACHE;
   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+
+  // Add authorization header if provided
+  if (!auth_token.empty()) {
+    request->headers.SetHeader("Authorization", "Bearer " + auth_token);
+  }
 
   auto loader =
       network::SimpleURLLoader::Create(std::move(request), kTrafficAnnotation);
@@ -514,7 +536,7 @@ InitPairingResponse Allow2ApiClient::ParseInitPairingResponse(
   }
 
   if (is_qr_pairing) {
-    // Server returns qrData: { url, deepLink, encodedData }
+    // Server returns qrData: { url, deepLink, encodedData } AND pin for combined mode
     const base::Value::Dict* qr_data = dict.FindDict("qrData");
     if (qr_data) {
       const std::string* qr_url = qr_data->FindString("url");
@@ -539,7 +561,14 @@ InitPairingResponse Allow2ApiClient::ParseInitPairingResponse(
         }
       }
     }
+
+    // QR pairing now also returns a PIN code (combined mode)
+    const std::string* pin = dict.FindString("pin");
+    if (pin) {
+      response.pin_code = *pin;
+    }
   } else {
+    // PIN-only pairing mode
     const std::string* pin = dict.FindString("pin");
     if (pin) {
       response.pin_code = *pin;
@@ -618,6 +647,10 @@ PairingStatusResponse Allow2ApiClient::ParsePairingStatusResponse(
           child.pin_salt = *pin_salt;
         }
 
+        // Check if child has their own Allow2 account
+        child.has_account =
+            child_dict.FindBool(kChildHasAccountKey).value_or(false);
+
         response.children.push_back(child);
       }
     }
@@ -640,6 +673,183 @@ PairingStatusResponse Allow2ApiClient::ParsePairingStatusResponse(
   }
 
   response.error = "Unknown status: " + *status;
+  return response;
+}
+
+// ============================================================================
+// Child Authentication Implementation
+// ============================================================================
+
+void Allow2ApiClient::RequestChildAuth(const Credentials& credentials,
+                                         uint64_t child_id,
+                                         const std::string& device_uuid,
+                                         const std::string& device_name,
+                                         ChildAuthRequestCallback callback) {
+  base::Value::Dict body;
+  body.Set(kCheckPairIdKey, credentials.pair_id);
+  body.Set(kCheckChildIdKey, static_cast<int>(child_id));
+  body.Set("deviceUuid", device_uuid);
+  body.Set("deviceName", device_name);
+
+  std::string body_json;
+  base::JSONWriter::Write(body, &body_json);
+
+  // Child auth uses api.allow2.com
+  GURL url(BuildUrl("/api/auth/child/request"));
+  auto loader = CreateLoader(url, "POST", body_json, credentials.pair_token);
+
+  auto* loader_ptr = loader.get();
+  loader_ptr->DownloadToString(
+      url_loader_factory_.get(),
+      base::BindOnce(&Allow2ApiClient::OnChildAuthRequestComplete,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(loader),
+                     std::move(callback)),
+      kMaxResponseSize);
+}
+
+void Allow2ApiClient::CheckChildAuthStatus(const Credentials& credentials,
+                                            const std::string& request_id,
+                                            ChildAuthStatusCallback callback) {
+  // Status endpoint uses GET with request ID in path
+  GURL url(BuildUrl("/api/auth/child/status/" + request_id));
+  auto loader = CreateLoader(url, "GET", "", credentials.pair_token);
+
+  auto* loader_ptr = loader.get();
+  loader_ptr->DownloadToString(
+      url_loader_factory_.get(),
+      base::BindOnce(&Allow2ApiClient::OnChildAuthStatusComplete,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(loader),
+                     std::move(callback)),
+      kMaxResponseSize);
+}
+
+void Allow2ApiClient::CancelChildAuth(const Credentials& credentials,
+                                       const std::string& request_id) {
+  // Cancel is fire-and-forget
+  base::Value::Dict body;
+  body.Set("requestId", request_id);
+
+  std::string body_json;
+  base::JSONWriter::Write(body, &body_json);
+
+  GURL url(BuildUrl("/api/auth/child/cancel"));
+  auto loader = CreateLoader(url, "POST", body_json, credentials.pair_token);
+
+  auto* loader_ptr = loader.get();
+  loader_ptr->DownloadToString(
+      url_loader_factory_.get(),
+      base::BindOnce([](std::optional<std::string>) {}),  // Ignore result
+      kMaxResponseSize);
+}
+
+void Allow2ApiClient::OnChildAuthRequestComplete(
+    std::unique_ptr<network::SimpleURLLoader> loader,
+    ChildAuthRequestCallback callback,
+    std::optional<std::string> response_body) {
+  if (!response_body.has_value() || loader->NetError() != net::OK) {
+    ChildAuthRequestResponse response;
+    response.success = false;
+    response.error = base::StringPrintf("Network error: %d", loader->NetError());
+    std::move(callback).Run(response);
+    return;
+  }
+
+  std::move(callback).Run(ParseChildAuthRequestResponse(response_body.value()));
+}
+
+void Allow2ApiClient::OnChildAuthStatusComplete(
+    std::unique_ptr<network::SimpleURLLoader> loader,
+    ChildAuthStatusCallback callback,
+    std::optional<std::string> response_body) {
+  if (!response_body.has_value() || loader->NetError() != net::OK) {
+    ChildAuthStatusResponse response;
+    response.success = false;
+    response.error = base::StringPrintf("Network error: %d", loader->NetError());
+    std::move(callback).Run(response);
+    return;
+  }
+
+  std::move(callback).Run(ParseChildAuthStatusResponse(response_body.value()));
+}
+
+ChildAuthRequestResponse Allow2ApiClient::ParseChildAuthRequestResponse(
+    const std::string& json) {
+  ChildAuthRequestResponse response;
+
+  auto parsed = base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
+  if (!parsed || !parsed->is_dict()) {
+    response.error = "Invalid JSON response";
+    return response;
+  }
+
+  const base::Value::Dict& dict = parsed->GetDict();
+
+  // Check for error
+  const std::string* error = dict.FindString("error");
+  if (error) {
+    response.error = *error;
+    return response;
+  }
+
+  const std::string* request_id = dict.FindString("requestId");
+  if (!request_id || request_id->empty()) {
+    response.error = "Missing requestId in response";
+    return response;
+  }
+
+  response.success = true;
+  response.request_id = *request_id;
+
+  const std::string* method = dict.FindString("method");
+  if (method) {
+    response.method = *method;
+  }
+
+  response.expires_in = dict.FindInt("expiresIn").value_or(60);
+
+  return response;
+}
+
+ChildAuthStatusResponse Allow2ApiClient::ParseChildAuthStatusResponse(
+    const std::string& json) {
+  ChildAuthStatusResponse response;
+
+  auto parsed = base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
+  if (!parsed || !parsed->is_dict()) {
+    response.error = "Invalid JSON response";
+    return response;
+  }
+
+  const base::Value::Dict& dict = parsed->GetDict();
+
+  // Check for error
+  const std::string* error = dict.FindString("error");
+  if (error) {
+    response.error = *error;
+    return response;
+  }
+
+  const std::string* status = dict.FindString("status");
+  if (!status) {
+    response.error = "Missing status in response";
+    return response;
+  }
+
+  response.success = true;
+  response.status = *status;
+  response.expires_in = dict.FindInt("expiresIn").value_or(0);
+
+  // Parse child info if confirmed
+  if (*status == "confirmed") {
+    response.child_id = static_cast<uint64_t>(
+        dict.FindInt("childId").value_or(0));
+
+    const std::string* child_name = dict.FindString("childName");
+    if (child_name) {
+      response.child_name = *child_name;
+    }
+  }
+
   return response;
 }
 

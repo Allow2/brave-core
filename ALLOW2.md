@@ -274,16 +274,27 @@ For devices shared among family members, a selection shield appears on launch:
 │                                                                  │
 │                    Who's using Brave?                            │
 │                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                                                             ││
+│  │  [QR CODE]    Scan with your Allow2 app                    ││
+│  │               to log in instantly                          ││
+│  │                                                             ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+│  ─────────────────── or select your profile ──────────────────  │
+│                                                                  │
 │         ┌─────────┐    ┌─────────┐    ┌─────────┐               │
 │         │  Emma   │    │  Jack   │    │  Guest  │               │
-│         │  (👧)   │    │  (👦)   │    │  (👤)   │               │
+│         │  📱     │    │  🔢     │    │  (👤)   │               │
 │         └─────────┘    └─────────┘    └─────────┘               │
+│                                                                  │
+│              📱 = Has app (scan QR)    🔢 = PIN only            │
 │                                                                  │
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                  │
 │                    Enter PIN: [• • • •]                          │
 │                                                                  │
-│         This helps track time limits and keep you safe          │
+│              [ 🔓 Ask Parent to Unlock ]                        │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -293,9 +304,253 @@ For devices shared among family members, a selection shield appears on launch:
 | Trigger | Condition | Action |
 |---------|-----------|--------|
 | App launch (cold start) | Paired + shared device mode | Show shield |
-| Resume from background (>5 min) | Paired + shared device mode | Show shield |
+| Resume from background (>30-60 sec) | Paired + shared device mode | Show shield |
 | Explicit "Switch User" | Paired (any mode) | Show shield |
 | Session timeout | Configurable by parent | Show shield |
+| System sleep/wake | Always | Show shield |
+| Screen lock | Always | Show shield |
+| App minimize (>60 sec) | Configurable | Show shield |
+
+### Child Authentication Methods
+
+Children authenticate based on their account type and connectivity:
+
+| Scenario | Primary Auth | Fallback |
+|----------|--------------|----------|
+| Online + has account | Push/Socket/Watch | PIN |
+| Online + name-only | PIN | PIN |
+| Offline (any) | PIN | PIN |
+
+**Every child has a PIN** - it's the universal offline fallback.
+
+#### Authentication Flow Decision Tree
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  Child taps their name on shield                                         │
+│                    │                                                     │
+│                    ▼                                                     │
+│           ┌───────────────┐                                              │
+│           │ Has network?  │                                              │
+│           └───────┬───────┘                                              │
+│                   │                                                      │
+│      ┌────────────┼────────────┐                                         │
+│      ▼ No                      ▼ Yes                                     │
+│  ┌────────┐              ┌──────────────┐                                │
+│  │  PIN   │              │ hasAccount?  │                                │
+│  │ entry  │              └──────┬───────┘                                │
+│  └────────┘                     │                                        │
+│                    ┌────────────┼────────────┐                           │
+│                    ▼ No                      ▼ Yes                       │
+│               ┌────────┐              ┌────────────────┐                 │
+│               │  PIN   │              │ Push to child  │                 │
+│               │ entry  │              │ (phone/watch)  │                 │
+│               └────────┘              └───────┬────────┘                 │
+│                                               │                          │
+│                                    ┌──────────┼──────────┐               │
+│                                    ▼ Timeout              ▼ Confirmed    │
+│                               ┌────────┐            ┌──────────┐         │
+│                               │  PIN   │            │ Session  │         │
+│                               │ entry  │            │ starts   │         │
+│                               └────────┘            └──────────┘         │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Method 1: Push/Socket/Watch (Full Account Children)
+
+Children with their own Allow2 account authenticate via push notification:
+
+```
+DEVICE (Brave)                    CHILD'S PHONE/WATCH           SERVER
+┌──────────────┐                 ┌───────────────────┐
+│              │                 │                   │
+│  Who's using │                 │                   │
+│    Brave?    │                 │                   │
+│              │                 │                   │
+│  [Emma] taps │ ───────────────────────────────────────────────>
+│              │                 │                   │    Send push
+│  "Waiting    │                 │  📱 PUSH:         │    Notify socket
+│   for Emma   │                 │  "Family iPad     │
+│   to         │                 │   wants to log    │
+│   confirm"   │                 │   you in"         │<─────────────
+│              │                 │                   │
+│  [PIN        │                 │  ⌚ WATCH:        │
+│   instead]   │                 │  [Yes] [No]       │
+│              │                 │                   │
+│              │                 │  Child taps Yes   │
+│              │<────────────────────────────────────────────────
+│  Logged in   │                 │  ✓ Confirmed      │
+│  as Emma!    │                 │                   │
+│              │                 │                   │
+└──────────────┘                 └───────────────────┘
+```
+
+**How It Works:**
+
+1. Child taps their name on shield
+2. Device requests auth session from server
+3. Server sends push notification + socket event to child's devices
+4. Child sees notification on phone or actionable buttons on Watch
+5. Child taps "Yes" to confirm (app unlocks with Face ID if needed)
+6. Server notifies device via polling/socket
+7. Session starts
+
+**Delivery Mechanisms:**
+
+| Mechanism | When Used | How It Works |
+|-----------|-----------|--------------|
+| **Push** | App closed/backgrounded | Tap notification → Open app → Confirm |
+| **Socket** | App already open | Request appears instantly |
+| **Watch** | On wrist + unlocked | Actionable Yes/No buttons |
+
+**Timeout Message (after 60s):**
+> "Still waiting for Emma to confirm... Make sure push notifications are enabled, or enter PIN instead."
+
+**API Endpoints:**
+
+```
+POST https://api.allow2.com/api/auth/child/request
+Authorization: Bearer {pairToken}
+Request:
+{
+    "pairId": "12345",
+    "childId": 1001,
+    "deviceUuid": "device-uuid-xxx",
+    "deviceName": "Family iPad - Brave"
+}
+
+Response:
+{
+    "requestId": "auth-req-abc123",
+    "method": "push",
+    "expiresIn": 60
+}
+```
+
+```
+GET https://api.allow2.com/api/auth/child/status/:requestId
+Authorization: Bearer {pairToken}
+
+Response (pending):
+{
+    "status": "pending",
+    "expiresIn": 45
+}
+
+Response (confirmed):
+{
+    "status": "confirmed",
+    "childId": 1001,
+    "childName": "Emma"
+}
+
+Response (denied):
+{
+    "status": "denied"
+}
+```
+
+```
+POST https://api.allow2.com/api/auth/child/confirm
+Authorization: Bearer {childAccessToken}
+Request:
+{
+    "requestId": "auth-req-abc123",
+    "allow": true
+}
+
+Response:
+{
+    "success": true
+}
+```
+
+#### Method 2: PIN Authentication (Name-Only or Fallback)
+
+For children without accounts, or when push times out, or offline:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│         ┌─────────┐                                             │
+│         │  Jack   │  ← Selected (name-only child)               │
+│         │  🔢     │                                             │
+│         └─────────┘                                             │
+│                                                                  │
+│                    Enter PIN: [• • • •]                          │
+│                                                                  │
+│              [ 🔓 Ask Parent to Unlock ]                        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Security Measures:**
+- PIN hashed with SHA-256 + unique salt (see Section 3)
+- Constant-time comparison prevents timing attacks
+- Rate limiting: 5 attempts, then 5-minute lockout
+- PIN cached locally for offline validation
+
+#### Method 3: Parent Unlock
+
+Any child can request parent unlock:
+
+1. Child taps "Ask Parent to Unlock"
+2. Push notification sent to parent's phone
+3. Parent confirms with biometric
+4. Device unlocks
+
+### Server Response: Child Types
+
+The server indicates which children have full accounts:
+
+```json
+{
+    "children": [
+        {
+            "id": 1001,
+            "name": "Emma",
+            "hasAccount": true,
+            "pinHash": "sha256:...",
+            "pinSalt": "..."
+        },
+        {
+            "id": 1002,
+            "name": "Jack",
+            "hasAccount": false,
+            "pinHash": "sha256:...",
+            "pinSalt": "..."
+        }
+    ]
+}
+```
+
+**Note:** ALL children have pinHash/pinSalt - PIN is the universal offline fallback.
+
+#### Device Behavior
+
+| `hasAccount` | Online Behavior | Offline Behavior |
+|--------------|-----------------|------------------|
+| `true` | Send push, wait for confirm, PIN fallback | PIN only |
+| `false` | PIN only | PIN only |
+
+### Session End Triggers
+
+Sessions end and require re-authentication on:
+
+| Trigger | Timeout | Rationale |
+|---------|---------|-----------|
+| App quit/restart | Immediate | Obvious end |
+| System sleep/wake | Immediate | Security |
+| Screen lock | Immediate | Security |
+| App backgrounded | 30-60 sec | Switched apps |
+| Window minimized | 60 sec | Not actively using |
+| Network disconnect | 2 min | Can't verify status |
+| Idle timeout | 5 min (configurable) | Inactivity |
+
+**Child-Friendly Message:**
+> "Session ended because Brave was closed. Tap your name to log back in."
 
 ### Usage Tracking
 

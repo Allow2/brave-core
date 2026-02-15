@@ -56,6 +56,10 @@ struct Child {
   std::string name;
   std::string pin_hash;
   std::string pin_salt;
+
+  // True if child has their own Allow2 account (can use push authentication).
+  // False for "name-only" children who can only use PIN.
+  bool has_account = false;
 };
 
 // Represents the result of an Allow2 check.

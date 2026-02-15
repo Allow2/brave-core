@@ -6,6 +6,7 @@
 #include "brave/components/allow2/browser/allow2_api_client.h"
 
 #include "base/json/json_writer.h"
+#include "brave/components/allow2/browser/allow2_credential_manager.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
@@ -450,6 +451,230 @@ TEST_F(Allow2ApiClientTest, Check_MalformedJSON) {
 
   EXPECT_TRUE(callback_called);
   EXPECT_FALSE(captured_response.success);
+}
+
+// ============================================================================
+// Child Authentication Tests
+// ============================================================================
+
+TEST_F(Allow2ApiClientTest, ChildAuthRequest_Success) {
+  bool callback_called = false;
+  ChildAuthRequestResponse captured_response;
+
+  Credentials creds;
+  creds.user_id = "user123";
+  creds.pair_id = "pair456";
+  creds.pair_token = "token789";
+
+  api_client_->RequestChildAuth(
+      creds, 1001, "device-uuid-123", "Family iPad - Brave",
+      base::BindOnce(
+          [](bool* called, ChildAuthRequestResponse* captured,
+             const ChildAuthRequestResponse& response) {
+            *called = true;
+            *captured = response;
+          },
+          &callback_called, &captured_response));
+
+  base::Value::Dict response;
+  response.Set("requestId", "auth-req-abc123");
+  response.Set("method", "push");
+  response.Set("expiresIn", 60);
+
+  std::string json;
+  base::JSONWriter::Write(response, &json);
+
+  test_url_loader_factory_->AddResponse(
+      "https://api.allow2.com/api/auth/child/request", json);
+
+  task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(callback_called);
+  EXPECT_TRUE(captured_response.success);
+  EXPECT_EQ("auth-req-abc123", captured_response.request_id);
+  EXPECT_EQ("push", captured_response.method);
+  EXPECT_EQ(60, captured_response.expires_in);
+}
+
+TEST_F(Allow2ApiClientTest, ChildAuthRequest_Error) {
+  bool callback_called = false;
+  ChildAuthRequestResponse captured_response;
+
+  Credentials creds;
+  creds.user_id = "user123";
+  creds.pair_id = "pair456";
+  creds.pair_token = "token789";
+
+  api_client_->RequestChildAuth(
+      creds, 1001, "device-uuid-123", "Family iPad - Brave",
+      base::BindOnce(
+          [](bool* called, ChildAuthRequestResponse* captured,
+             const ChildAuthRequestResponse& response) {
+            *called = true;
+            *captured = response;
+          },
+          &callback_called, &captured_response));
+
+  base::Value::Dict response;
+  response.Set("error", "Child does not have push notifications enabled");
+
+  std::string json;
+  base::JSONWriter::Write(response, &json);
+
+  test_url_loader_factory_->AddResponse(
+      "https://api.allow2.com/api/auth/child/request", json);
+
+  task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(callback_called);
+  EXPECT_FALSE(captured_response.success);
+  EXPECT_FALSE(captured_response.error.empty());
+}
+
+TEST_F(Allow2ApiClientTest, ChildAuthStatus_Pending) {
+  bool callback_called = false;
+  ChildAuthStatusResponse captured_response;
+
+  Credentials creds;
+  creds.user_id = "user123";
+  creds.pair_id = "pair456";
+  creds.pair_token = "token789";
+
+  api_client_->CheckChildAuthStatus(
+      creds, "auth-req-abc123",
+      base::BindOnce(
+          [](bool* called, ChildAuthStatusResponse* captured,
+             const ChildAuthStatusResponse& response) {
+            *called = true;
+            *captured = response;
+          },
+          &callback_called, &captured_response));
+
+  base::Value::Dict response;
+  response.Set("status", "pending");
+  response.Set("expiresIn", 45);
+
+  std::string json;
+  base::JSONWriter::Write(response, &json);
+
+  test_url_loader_factory_->AddResponse(
+      "https://api.allow2.com/api/auth/child/status/auth-req-abc123", json);
+
+  task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(callback_called);
+  EXPECT_TRUE(captured_response.success);
+  EXPECT_EQ("pending", captured_response.status);
+  EXPECT_EQ(45, captured_response.expires_in);
+}
+
+TEST_F(Allow2ApiClientTest, ChildAuthStatus_Confirmed) {
+  bool callback_called = false;
+  ChildAuthStatusResponse captured_response;
+
+  Credentials creds;
+  creds.user_id = "user123";
+  creds.pair_id = "pair456";
+  creds.pair_token = "token789";
+
+  api_client_->CheckChildAuthStatus(
+      creds, "auth-req-abc123",
+      base::BindOnce(
+          [](bool* called, ChildAuthStatusResponse* captured,
+             const ChildAuthStatusResponse& response) {
+            *called = true;
+            *captured = response;
+          },
+          &callback_called, &captured_response));
+
+  base::Value::Dict response;
+  response.Set("status", "confirmed");
+  response.Set("childId", 1001);
+  response.Set("childName", "Emma");
+
+  std::string json;
+  base::JSONWriter::Write(response, &json);
+
+  test_url_loader_factory_->AddResponse(
+      "https://api.allow2.com/api/auth/child/status/auth-req-abc123", json);
+
+  task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(callback_called);
+  EXPECT_TRUE(captured_response.success);
+  EXPECT_EQ("confirmed", captured_response.status);
+  EXPECT_EQ(1001u, captured_response.child_id);
+  EXPECT_EQ("Emma", captured_response.child_name);
+}
+
+TEST_F(Allow2ApiClientTest, ChildAuthStatus_Denied) {
+  bool callback_called = false;
+  ChildAuthStatusResponse captured_response;
+
+  Credentials creds;
+  creds.user_id = "user123";
+  creds.pair_id = "pair456";
+  creds.pair_token = "token789";
+
+  api_client_->CheckChildAuthStatus(
+      creds, "auth-req-abc123",
+      base::BindOnce(
+          [](bool* called, ChildAuthStatusResponse* captured,
+             const ChildAuthStatusResponse& response) {
+            *called = true;
+            *captured = response;
+          },
+          &callback_called, &captured_response));
+
+  base::Value::Dict response;
+  response.Set("status", "denied");
+
+  std::string json;
+  base::JSONWriter::Write(response, &json);
+
+  test_url_loader_factory_->AddResponse(
+      "https://api.allow2.com/api/auth/child/status/auth-req-abc123", json);
+
+  task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(callback_called);
+  EXPECT_TRUE(captured_response.success);
+  EXPECT_EQ("denied", captured_response.status);
+}
+
+TEST_F(Allow2ApiClientTest, ChildAuthStatus_Expired) {
+  bool callback_called = false;
+  ChildAuthStatusResponse captured_response;
+
+  Credentials creds;
+  creds.user_id = "user123";
+  creds.pair_id = "pair456";
+  creds.pair_token = "token789";
+
+  api_client_->CheckChildAuthStatus(
+      creds, "auth-req-abc123",
+      base::BindOnce(
+          [](bool* called, ChildAuthStatusResponse* captured,
+             const ChildAuthStatusResponse& response) {
+            *called = true;
+            *captured = response;
+          },
+          &callback_called, &captured_response));
+
+  base::Value::Dict response;
+  response.Set("status", "expired");
+
+  std::string json;
+  base::JSONWriter::Write(response, &json);
+
+  test_url_loader_factory_->AddResponse(
+      "https://api.allow2.com/api/auth/child/status/auth-req-abc123", json);
+
+  task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(callback_called);
+  EXPECT_TRUE(captured_response.success);
+  EXPECT_EQ("expired", captured_response.status);
 }
 
 }  // namespace allow2
