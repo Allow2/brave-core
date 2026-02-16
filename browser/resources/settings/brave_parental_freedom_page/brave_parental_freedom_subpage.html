@@ -8,17 +8,70 @@
     align-items: center;
     gap: 16px;
     margin-bottom: 24px;
+    padding: 16px 0;
   }
 
   .allow2-logo {
-    width: 48px;
-    height: 48px;
+    width: 64px;
+    height: 64px;
   }
 
   .allow2-title {
-    font-size: 18px;
+    font-size: 24px;
     font-weight: 600;
     color: var(--cr-primary-text-color);
+  }
+
+  .allow2-subtitle {
+    font-size: 14px;
+    color: var(--cr-secondary-text-color);
+    margin-top: 4px;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 24px;
+    background: var(--cr-card-background-color);
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+
+  .page-header-icon {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+  }
+
+  .page-header-text {
+    flex: 1;
+  }
+
+  .page-header-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--cr-primary-text-color);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .page-header-description {
+    font-size: 14px;
+    color: var(--cr-secondary-text-color);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  .page-header-action {
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  .header-pair-button {
+    --cr-button-height: 40px;
+    font-weight: 500;
   }
 
   .benefits-section {
@@ -50,9 +103,17 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    align-items: flex-start;
+    align-items: stretch;
     padding: 0 24px 24px 24px;
     margin-top: 8px;
+    text-align: center;
+  }
+
+  .primary-pair-button {
+    --cr-button-height: 52px;
+    font-size: 16px;
+    font-weight: 600;
+    width: 100%;
   }
 
   .learn-more-link {
@@ -145,7 +206,37 @@
 </style>
 
 <settings-section
-  page-title="$i18n{braveParentalFreedom}">
+  page-title="Allow2 Parental Freedom">
+
+  <!-- Page Header with Prominent Hand Icon (hidden during pairing) -->
+  <template is="dom-if" if="[[!pairingSession_]]">
+    <div class="page-header">
+      <img src="chrome://settings/brave_parental_freedom_page/allow2_hand.svg"
+           alt="Allow2" class="page-header-icon">
+      <div class="page-header-text">
+        <div class="page-header-title">
+          Allow2 Parental Freedom
+        </div>
+        <div class="page-header-description">
+          Cross-platform parental controls that empower families with trust-based screen time management.
+        </div>
+      </div>
+      <template is="dom-if" if="[[!isPaired_]]">
+        <div class="page-header-action">
+          <cr-button class="header-pair-button action-button" on-click="onStartPairing_">
+            Pair with Allow2
+          </cr-button>
+        </div>
+      </template>
+    </div>
+
+    <!-- Embedded Ad/Promo Block from Allow2 (hidden during pairing) -->
+    <iframe id="allow2PromoFrame"
+            src="https://app.allow2.com/embed/brave-promo.html"
+            style="width: 100%; border: none; border-radius: 12px; margin-bottom: 24px; min-height: 120px;"
+            sandbox="allow-scripts allow-same-origin"
+            loading="lazy"></iframe>
+  </template>
 
   <!-- Not Paired State: Show Benefits and Pair Button -->
   <template is="dom-if" if="[[!isPaired_]]">
@@ -165,7 +256,7 @@
         <a href="https://www.allow2.com" target="_blank" rel="noopener" class="learn-more-link">
           Learn more about Allow2 Parental Freedom →
         </a>
-        <cr-button class="action-button" on-click="onStartPairing_">
+        <cr-button class="primary-pair-button action-button" on-click="onStartPairing_">
           Pair with Allow2
         </cr-button>
       </div>

@@ -327,9 +327,9 @@ RegisterPolymerTemplateModifications({
 
     // Add Parental Freedom item (after Search)
     const parentalFreedomEl = createMenuElement(
-      loadTimeData.getString('braveParentalFreedom'),
+      'Parental Freedom',
       '/parentalFreedom',
-      'shield-done',
+      'product-parental-freedom',
       'parentalFreedom',
     )
     lastInserted = lastInserted.insertAdjacentElement('afterend', parentalFreedomEl)!
