@@ -69,6 +69,37 @@ inline constexpr char kAllow2DeviceName[] = "brave.allow2.device_name";
 // Timestamp when device was paired.
 inline constexpr char kAllow2PairedAt[] = "brave.allow2.paired_at";
 
+// ============================================================================
+// Offline cache (stored in local_state for persistence)
+// ============================================================================
+
+// Complete offline cache JSON containing days, activities, time blocks.
+// Updated from server check responses for offline operation.
+inline constexpr char kAllow2OfflineCache[] = "brave.allow2.offline_cache";
+
+// Local usage tracking for offline deficit detection.
+// Format: JSON object mapping "YYYY-MM-DD-activityId" -> minutes used.
+inline constexpr char kAllow2LocalUsage[] = "brave.allow2.local_usage";
+
+// Local extensions pending sync (from voice codes or QR scans).
+// Format: JSON array of extension objects.
+inline constexpr char kAllow2LocalExtensions[] = "brave.allow2.local_extensions";
+
+// Deficit pool tracking borrowed time that needs to be repaid.
+// Format: JSON object mapping child_id -> deficit_seconds.
+inline constexpr char kAllow2DeficitPool[] = "brave.allow2.deficit_pool";
+
+// Home timezone for travel mode (timezone of parent's Allow2 account).
+inline constexpr char kAllow2HomeTimezone[] = "brave.allow2.home_timezone";
+
+// Timestamp of last local decision made while offline.
+inline constexpr char kAllow2LastLocalDecision[] =
+    "brave.allow2.last_local_decision";
+
+// Time windows cache for offline time block enforcement.
+// Format: JSON object mapping child_id -> array of time windows.
+inline constexpr char kAllow2TimeWindows[] = "brave.allow2.time_windows";
+
 }  // namespace prefs
 }  // namespace allow2
 

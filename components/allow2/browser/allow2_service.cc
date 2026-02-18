@@ -17,8 +17,13 @@
 #include "brave/components/allow2/browser/allow2_child_manager.h"
 #include "brave/components/allow2/browser/allow2_child_shield.h"
 #include "brave/components/allow2/browser/allow2_credential_manager.h"
+#include "brave/components/allow2/browser/allow2_deficit_tracker.h"
+#include "brave/components/allow2/browser/allow2_local_decision.h"
+#include "brave/components/allow2/browser/allow2_offline_cache.h"
 #include "brave/components/allow2/browser/allow2_pairing_handler.h"
+#include "brave/components/allow2/browser/allow2_travel_mode.h"
 #include "brave/components/allow2/browser/allow2_usage_tracker.h"
+#include "brave/components/allow2/browser/allow2_voice_code.h"
 #include "brave/components/allow2/browser/allow2_warning_banner.h"
 #include "brave/components/allow2/browser/allow2_warning_controller.h"
 #include "brave/components/allow2/common/allow2_utils.h"
@@ -72,6 +77,12 @@ Allow2Service::Allow2Service(
       api_client_.get(), credential_manager_.get());
   usage_tracker_ = std::make_unique<Allow2UsageTracker>(api_client_.get());
   warning_banner_ = std::make_unique<Allow2WarningBanner>();
+
+  // Initialize offline authentication components
+  offline_cache_ = std::make_unique<Allow2OfflineCache>(profile_prefs_);
+  deficit_tracker_ = std::make_unique<Allow2DeficitTracker>(profile_prefs_);
+  travel_mode_ = std::make_unique<Allow2TravelMode>(profile_prefs_);
+  local_decision_ = std::make_unique<Allow2LocalDecision>(offline_cache_.get());
 
   // Set up warning controller callbacks
   warning_controller_->SetWarningCallback(
@@ -447,16 +458,39 @@ void Allow2Service::CheckAllowance(CheckCallback callback) {
             if (response.success) {
               self->OnCheckResult(response.result);
               self->CacheCheckResult(response.result);
+
+              // Update offline cache with fresh server response
+              std::string child_id_str = GetCurrentChildId(self->profile_prefs_);
+              if (!child_id_str.empty() && self->offline_cache_) {
+                uint64_t child_id = std::stoull(child_id_str);
+                self->offline_cache_->CacheResult(child_id, response.result);
+              }
+
               std::move(callback).Run(response.result);
             } else {
-              // On error, use cached result if available
-              auto cached = self->LoadCachedCheckResult();
-              if (cached) {
-                std::move(callback).Run(*cached);
+              // On error, try local decision first (offline mode)
+              std::string child_id_str = GetCurrentChildId(self->profile_prefs_);
+              if (!child_id_str.empty() && self->local_decision_ &&
+                  self->local_decision_->IsCacheValid()) {
+                // Use local decision engine for offline check
+                auto local_result = self->local_decision_->Check(
+                    static_cast<uint8_t>(ActivityId::kInternet));
+                CheckResult result;
+                result.allowed = local_result.allowed;
+                result.remaining_seconds = local_result.remaining_minutes * 60;
+                result.block_reason = local_result.reason;
+                self->OnCheckResult(result);
+                std::move(callback).Run(result);
               } else {
-                CheckResult default_result;
-                default_result.allowed = true;
-                std::move(callback).Run(default_result);
+                // Fall back to cached result
+                auto cached = self->LoadCachedCheckResult();
+                if (cached) {
+                  std::move(callback).Run(*cached);
+                } else {
+                  CheckResult default_result;
+                  default_result.allowed = true;
+                  std::move(callback).Run(default_result);
+                }
               }
             }
           },
@@ -573,6 +607,109 @@ Allow2PairingHandler* Allow2Service::GetPairingHandler() {
 Allow2UsageTracker* Allow2Service::GetUsageTracker() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return usage_tracker_.get();
+}
+
+// ============================================================================
+// Offline Authentication
+// ============================================================================
+
+Allow2OfflineCache* Allow2Service::GetOfflineCache() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return offline_cache_.get();
+}
+
+Allow2LocalDecision* Allow2Service::GetLocalDecision() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return local_decision_.get();
+}
+
+Allow2DeficitTracker* Allow2Service::GetDeficitTracker() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return deficit_tracker_.get();
+}
+
+Allow2TravelMode* Allow2Service::GetTravelMode() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return travel_mode_.get();
+}
+
+bool Allow2Service::IsOffline() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // Check if offline cache indicates we're offline
+  if (offline_cache_) {
+    return !offline_cache_->IsOnline();
+  }
+  return false;
+}
+
+void Allow2Service::GrantTimeWithVoiceCode(const std::string& voice_code,
+                                            VoiceCodeCallback callback) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // Parse the approval code (voice code is the approval code from parent)
+  // The child's device needs to validate it against the stored request code
+  auto request = Allow2VoiceCode::ParseRequestCode(voice_code);
+  if (!request) {
+    std::move(callback).Run(false, 0, "Invalid voice code format");
+    return;
+  }
+
+  // Extract granted minutes from the parsed request
+  int granted_minutes = request->minutes;
+  int granted_seconds = granted_minutes * 60;
+
+  if (granted_minutes <= 0) {
+    std::move(callback).Run(false, 0, "Invalid voice code");
+    return;
+  }
+
+  // Get current child
+  std::string child_id_str = GetCurrentChildId(profile_prefs_);
+  if (child_id_str.empty()) {
+    std::move(callback).Run(false, 0, "No child selected");
+    return;
+  }
+
+  uint64_t child_id = std::stoull(child_id_str);
+
+  // Check if we can grant more time (deficit not exceeded)
+  if (deficit_tracker_ && deficit_tracker_->IsDeficitExceeded(child_id)) {
+    std::move(callback).Run(false, 0,
+        "Maximum borrowed time exceeded. Please wait for sync.");
+    return;
+  }
+
+  // Record deficit for later sync
+  if (deficit_tracker_) {
+    deficit_tracker_->AddDeficit(child_id, granted_seconds);
+  }
+
+  // Grant the time locally
+  remaining_seconds_ += granted_seconds;
+  is_blocked_ = false;
+
+  // Update prefs
+  profile_prefs_->SetBoolean(prefs::kAllow2Blocked, is_blocked_);
+  profile_prefs_->SetInteger(prefs::kAllow2RemainingSeconds, remaining_seconds_);
+
+  // Dismiss block overlay if showing
+  DismissBlockOverlay();
+
+  // Notify observers
+  NotifyBlockingStateChanged(false, "");
+  NotifyRemainingTimeUpdated(remaining_seconds_);
+
+  LOG(INFO) << "Allow2: Voice code granted " << granted_minutes
+            << " minutes for child " << child_id;
+
+  std::move(callback).Run(true, granted_minutes, "");
+}
+
+void Allow2Service::ShowVoiceCodeUI() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // This will be called by the block overlay to show voice code entry
+  // The actual UI is handled by Allow2VoiceCodeView in browser/ui/views
+  LOG(INFO) << "Allow2: Showing voice code UI";
 }
 
 // ============================================================================

@@ -38,7 +38,11 @@ class Allow2BlockOverlay;
 class Allow2ChildManager;
 class Allow2ChildShield;
 class Allow2CredentialManager;
+class Allow2DeficitTracker;
+class Allow2LocalDecision;
+class Allow2OfflineCache;
 class Allow2PairingHandler;
+class Allow2TravelMode;
 class Allow2UsageTracker;
 class Allow2WarningBanner;
 class Allow2WarningController;
@@ -279,6 +283,35 @@ class Allow2Service : public KeyedService,
   Allow2UsageTracker* GetUsageTracker();
 
   // ============================================================================
+  // Offline Authentication
+  // ============================================================================
+
+  // Get the offline cache.
+  Allow2OfflineCache* GetOfflineCache();
+
+  // Get the local decision engine.
+  Allow2LocalDecision* GetLocalDecision();
+
+  // Get the deficit tracker.
+  Allow2DeficitTracker* GetDeficitTracker();
+
+  // Get the travel mode handler.
+  Allow2TravelMode* GetTravelMode();
+
+  // Check if device is currently offline.
+  bool IsOffline() const;
+
+  // Grant time using a voice code (offline capable).
+  using VoiceCodeCallback =
+      base::OnceCallback<void(bool success, int granted_minutes,
+                              const std::string& error)>;
+  void GrantTimeWithVoiceCode(const std::string& voice_code,
+                               VoiceCodeCallback callback);
+
+  // Show the voice code entry UI.
+  void ShowVoiceCodeUI();
+
+  // ============================================================================
   // Tracking Control
   // ============================================================================
 
@@ -387,6 +420,12 @@ class Allow2Service : public KeyedService,
   std::unique_ptr<Allow2UsageTracker> usage_tracker_;
   std::unique_ptr<Allow2WarningBanner> warning_banner_;
   std::unique_ptr<Allow2WarningController> warning_controller_;
+
+  // Offline authentication components.
+  std::unique_ptr<Allow2OfflineCache> offline_cache_;
+  std::unique_ptr<Allow2LocalDecision> local_decision_;
+  std::unique_ptr<Allow2DeficitTracker> deficit_tracker_;
+  std::unique_ptr<Allow2TravelMode> travel_mode_;
 
   // Periodic check timer.
   base::RepeatingTimer check_timer_;

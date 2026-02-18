@@ -13,6 +13,8 @@ source_set("allow2") {
     "allow2_child_select_view.h",
     "allow2_pairing_view.cc",
     "allow2_pairing_view.h",
+    "allow2_voice_code_view.cc",
+    "allow2_voice_code_view.h",
   ]
 
   deps = [
