@@ -74,6 +74,28 @@
     font-weight: 500;
   }
 
+  .button-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .button-content {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .benefits-section {
     padding: 24px;
     background: var(--cr-card-background-color);
@@ -203,6 +225,53 @@
     justify-content: center;
     margin-top: 16px;
   }
+
+  /* Promo section with iframe fallback */
+  .promo-container {
+    position: relative;
+    margin-bottom: 24px;
+  }
+
+  .promo-iframe {
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    min-height: 120px;
+  }
+
+  .promo-fallback {
+    display: none;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
+    border-radius: 12px;
+    color: white;
+  }
+
+  .promo-fallback.visible {
+    display: block;
+  }
+
+  .promo-fallback-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .promo-fallback-text {
+    font-size: 14px;
+    opacity: 0.9;
+    line-height: 1.5;
+  }
+
+  .promo-fallback-link {
+    color: white;
+    text-decoration: underline;
+    font-weight: 500;
+  }
+
+  .promo-fallback-link:hover {
+    opacity: 0.9;
+  }
 </style>
 
 <settings-section
@@ -223,19 +292,42 @@
       </div>
       <template is="dom-if" if="[[!isPaired_]]">
         <div class="page-header-action">
-          <cr-button class="header-pair-button action-button" on-click="onStartPairing_">
-            Pair with Allow2
+          <cr-button class="header-pair-button action-button"
+                     on-click="onStartPairing_"
+                     disabled$="[[isPairingLoading_]]">
+            <span class="button-content">
+              <template is="dom-if" if="[[isPairingLoading_]]">
+                <span class="button-spinner"></span>
+              </template>
+              <span>[[getPairButtonText_(isPairingLoading_)]]</span>
+            </span>
           </cr-button>
         </div>
       </template>
     </div>
 
-    <!-- Embedded Ad/Promo Block from Allow2 (hidden during pairing) -->
-    <iframe id="allow2PromoFrame"
-            src="https://app.allow2.com/embed/brave-promo.html"
-            style="width: 100%; border: none; border-radius: 12px; margin-bottom: 24px; min-height: 120px;"
-            sandbox="allow-scripts allow-same-origin"
-            loading="lazy"></iframe>
+    <!-- Embedded Ad/Promo Block from Allow2 (only when not paired) -->
+    <template is="dom-if" if="[[!isPaired_]]">
+      <div class="promo-container">
+        <iframe id="allow2PromoFrame"
+                class="promo-iframe"
+                src="https://app.allow2.com/embed/brave-promo.html"
+                sandbox="allow-scripts allow-same-origin"
+                loading="lazy"
+                on-error="onPromoFrameError_"
+                on-load="onPromoFrameLoad_"></iframe>
+        <div id="promoFallback" class="promo-fallback">
+          <div class="promo-fallback-title">Screen Time That Works for Everyone</div>
+          <div class="promo-fallback-text">
+            Allow2 helps families build healthy digital habits together.
+            Set limits, earn rewards, and keep everyone on the same page.
+            <a href="https://www.allow2.com" target="_blank" rel="noopener" class="promo-fallback-link">
+              Learn more →
+            </a>
+          </div>
+        </div>
+      </div>
+    </template>
   </template>
 
   <!-- Not Paired State: Show Benefits and Pair Button -->
@@ -256,8 +348,15 @@
         <a href="https://www.allow2.com" target="_blank" rel="noopener" class="learn-more-link">
           Learn more about Allow2 Parental Freedom →
         </a>
-        <cr-button class="primary-pair-button action-button" on-click="onStartPairing_">
-          Pair with Allow2
+        <cr-button class="primary-pair-button action-button"
+                   on-click="onStartPairing_"
+                   disabled$="[[isPairingLoading_]]">
+          <span class="button-content">
+            <template is="dom-if" if="[[isPairingLoading_]]">
+              <span class="button-spinner"></span>
+            </template>
+            <span>[[getPairButtonText_(isPairingLoading_)]]</span>
+          </span>
         </cr-button>
       </div>
     </template>
@@ -332,3 +431,8 @@
   </template>
 
 </settings-section>
+
+<!-- Error Toast -->
+<cr-toast id="errorToast" duration="5000">
+  <div>[[toastMessage_]]</div>
+</cr-toast>

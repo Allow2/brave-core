@@ -18,6 +18,7 @@ import {
 } from './brave_parental_freedom_browser_proxy.js'
 
 import {getTemplate} from './brave_parental_freedom_subpage.html.js'
+import type {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js'
 
 const SettingsBraveParentalFreedomPageBase =
   I18nMixin(RouteObserverMixin(WebUiListenerMixin(PrefsMixin(PolymerElement))))
@@ -52,12 +53,27 @@ class SettingsBraveParentalFreedomPage
         type: Number,
         value: null,
       },
+
+      isPairingLoading_: {
+        type: Boolean,
+        value: false,
+      },
+
+      toastMessage_: {
+        type: String,
+        value: '',
+      },
     }
   }
 
   private declare isPaired_: boolean
   private declare pairingSession_: PairingSession | null
   private declare pollingInterval_: number | null
+  private declare isPairingLoading_: boolean
+  private declare toastMessage_: string
+  private pairingTimeout_: number | null = null
+  private promoFrameTimeout_: number | null = null
+  private promoFrameLoaded_: boolean = false
 
   private browserProxy_: BraveParentalFreedomBrowserProxy =
     BraveParentalFreedomBrowserProxyImpl.getInstance()
@@ -77,6 +93,13 @@ class SettingsBraveParentalFreedomPage
     this.addWebUiListener('pairing-state-changed', () => {
       this.loadPairingStatus_()
     })
+
+    // Set timeout for promo frame - show fallback if it doesn't load in 5 seconds
+    this.promoFrameTimeout_ = window.setTimeout(() => {
+      if (!this.promoFrameLoaded_) {
+        this.showPromoFallback_()
+      }
+    }, 5000)
   }
 
   override currentRouteChanged() {
@@ -87,6 +110,11 @@ class SettingsBraveParentalFreedomPage
   override disconnectedCallback() {
     super.disconnectedCallback()
     this.stopPolling_()
+    this.clearPairingTimeout_()
+    if (this.promoFrameTimeout_ !== null) {
+      window.clearTimeout(this.promoFrameTimeout_)
+      this.promoFrameTimeout_ = null
+    }
   }
 
   private async loadPairingStatus_() {
@@ -95,22 +123,57 @@ class SettingsBraveParentalFreedomPage
   }
 
   private async onStartPairing_() {
-    const deviceName = 'Brave Browser'
-    // Use QR pairing to get a QR code image from the C++ backend
-    const result = await this.browserProxy_.initQRPairing(deviceName)
+    if (this.isPairingLoading_) {
+      return
+    }
 
-    if (result.success) {
-      this.pairingSession_ = result
-      this.startPolling_()
-      // Wait for DOM to update before setting QR code image
-      // Use requestAnimationFrame to ensure the template has rendered
-      requestAnimationFrame(() => {
+    this.isPairingLoading_ = true
+    this.clearPairingTimeout_()
+
+    // Set a timeout to reset state if no response
+    this.pairingTimeout_ = window.setTimeout(() => {
+      if (this.isPairingLoading_ && !this.pairingSession_) {
+        console.error('Pairing request timed out')
+        this.isPairingLoading_ = false
+        this.showToast_('Connection timed out. Please check your internet connection and try again.')
+      }
+    }, 30000)
+
+    try {
+      const deviceName = 'Brave Browser'
+      // Use QR pairing to get a QR code image from the C++ backend
+      const result = await this.browserProxy_.initQRPairing(deviceName)
+
+      this.clearPairingTimeout_()
+
+      if (result.success) {
+        this.pairingSession_ = result
+        this.isPairingLoading_ = false
+        this.startPolling_()
+        // Wait for DOM to update before setting QR code image
+        // Use requestAnimationFrame to ensure the template has rendered
         requestAnimationFrame(() => {
-          this.updateQRCode_()
+          requestAnimationFrame(() => {
+            this.updateQRCode_()
+          })
         })
-      })
-    } else {
-      console.error('Failed to start pairing:', result.error)
+      } else {
+        console.error('Failed to start pairing:', result.error)
+        this.isPairingLoading_ = false
+        this.showToast_(result.error || 'Failed to start pairing. Please try again.')
+      }
+    } catch (error) {
+      console.error('Pairing error:', error)
+      this.clearPairingTimeout_()
+      this.isPairingLoading_ = false
+      this.showToast_('An unexpected error occurred. Please try again.')
+    }
+  }
+
+  private clearPairingTimeout_() {
+    if (this.pairingTimeout_ !== null) {
+      window.clearTimeout(this.pairingTimeout_)
+      this.pairingTimeout_ = null
     }
   }
 
@@ -167,8 +230,54 @@ class SettingsBraveParentalFreedomPage
         this.loadPairingStatus_()
       } else {
         console.error('Pairing failed:', result.error)
+        this.showToast_(result.error || 'Pairing failed. Please try again.')
       }
     }
+  }
+
+  private showToast_(message: string) {
+    this.toastMessage_ = message
+    const toast = this.shadowRoot?.querySelector<CrToastElement>('#errorToast')
+    if (toast) {
+      toast.show()
+    }
+  }
+
+  private onPromoFrameError_() {
+    this.showPromoFallback_()
+  }
+
+  private onPromoFrameLoad_() {
+    // Mark as loaded and clear the timeout
+    this.promoFrameLoaded_ = true
+    if (this.promoFrameTimeout_ !== null) {
+      window.clearTimeout(this.promoFrameTimeout_)
+      this.promoFrameTimeout_ = null
+    }
+    // Hide fallback since iframe loaded successfully
+    this.hidePromoFallback_()
+  }
+
+  private showPromoFallback_() {
+    const iframe = this.shadowRoot?.getElementById('allow2PromoFrame')
+    const fallback = this.shadowRoot?.getElementById('promoFallback')
+    if (iframe) {
+      iframe.style.display = 'none'
+    }
+    if (fallback) {
+      fallback.classList.add('visible')
+    }
+  }
+
+  private hidePromoFallback_() {
+    const fallback = this.shadowRoot?.getElementById('promoFallback')
+    if (fallback) {
+      fallback.classList.remove('visible')
+    }
+  }
+
+  private getPairButtonText_(isLoading: boolean): string {
+    return isLoading ? 'Connecting...' : 'Pair with Allow2'
   }
 
   private getWebPairingUrl_(session: PairingSession | null): string {

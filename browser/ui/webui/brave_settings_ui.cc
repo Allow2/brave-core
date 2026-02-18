@@ -68,6 +68,7 @@
 #include "extensions/buildflags/buildflags.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/features.h"
+#include "services/network/public/mojom/content_security_policy.mojom.h"
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
 #include "brave/browser/ai_chat/ai_chat_settings_helper.h"
@@ -189,6 +190,11 @@ BraveSettingsUI::~BraveSettingsUI() = default;
 void BraveSettingsUI::AddResources(content::WebUIDataSource* html_source,
                                    Profile* profile) {
   html_source->AddResourcePaths(kBraveSettingsResources);
+
+  // Allow iframe from app.allow2.com for parental controls promo content
+  html_source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::FrameSrc,
+      "frame-src https://app.allow2.com 'self';");
 
   html_source->AddBoolean("isSyncDisabled", !syncer::IsSyncAllowedByFlag());
   html_source->AddString(
