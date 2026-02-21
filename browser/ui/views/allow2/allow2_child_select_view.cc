@@ -5,24 +5,35 @@
 
 #include "brave/browser/ui/views/allow2/allow2_child_select_view.h"
 
+#include <array>
 #include <memory>
 #include <utility>
 
 #include "base/functional/bind.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "cc/paint/paint_flags.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "components/constrained_window/constrained_window_views.h"
+#include "components/grit/brave_components_resources.h"
+#include "ui/base/models/image_model.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/resource/resource_bundle.h"
 #include "ui/events/event.h"
+#include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
+#include "ui/gfx/color_utils.h"
 #include "ui/gfx/font.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/gfx/geometry/skia_conversions.h"
+#include "ui/gfx/image/image_skia_operations.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/md_text_button.h"
+#include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/box_layout.h"
@@ -40,10 +51,12 @@ constexpr int kElementSpacing = 16;
 constexpr int kChildButtonSpacing = 12;
 constexpr int kChildButtonPadding = 16;
 constexpr int kChildButtonWidth = 100;
-constexpr int kChildButtonHeight = 80;
+constexpr int kChildButtonHeight = 100;
 constexpr int kPinFieldWidth = 150;
 constexpr int kTitleFontSize = 22;
 constexpr int kChildNameFontSize = 14;
+constexpr int kAvatarSize = 48;
+constexpr int kLogoSize = 64;
 
 // Colors.
 constexpr SkColor kBackgroundColor = SkColorSetRGB(0xFA, 0xFA, 0xFA);
@@ -54,12 +67,154 @@ constexpr SkColor kChildButtonSelectedColor = gfx::kGoogleBlue100;
 constexpr SkColor kChildButtonBorderColor = gfx::kGoogleBlue600;
 constexpr SkColor kErrorColor = SkColorSetRGB(0xE0, 0x4B, 0x4B);
 
+// Default avatar colors (10 colors for variety).
+constexpr size_t kNumAvatarColors = 10;
+constexpr std::array<SkColor, kNumAvatarColors> kAvatarColors = {{
+    SkColorSetRGB(0xE9, 0x1E, 0x63),  // Pink
+    SkColorSetRGB(0x9C, 0x27, 0xB0),  // Purple
+    SkColorSetRGB(0x67, 0x3A, 0xB7),  // Deep Purple
+    SkColorSetRGB(0x3F, 0x51, 0xB5),  // Indigo
+    SkColorSetRGB(0x21, 0x96, 0xF3),  // Blue
+    SkColorSetRGB(0x00, 0x96, 0x88),  // Teal
+    SkColorSetRGB(0x4C, 0xAF, 0x50),  // Green
+    SkColorSetRGB(0xFF, 0x98, 0x00),  // Orange
+    SkColorSetRGB(0xFF, 0x57, 0x22),  // Deep Orange
+    SkColorSetRGB(0x79, 0x55, 0x48),  // Brown
+}};
+
 // Singleton tracking for IsShowing().
 static bool g_is_showing = false;
 
 }  // namespace
 
+// Allow2LogoView - The Allow2 yellow hand logo.
+// Uses the PNG logo from Allow2 iOS assets (100x100).
+class Allow2LogoView : public views::ImageView {
+  METADATA_HEADER(Allow2LogoView, views::ImageView)
+
+ public:
+  Allow2LogoView() {
+    // Load the Allow2 logo from resources.
+    ui::ResourceBundle& rb = ui::ResourceBundle::GetSharedInstance();
+    const gfx::ImageSkia* logo = rb.GetImageSkiaNamed(IDR_ALLOW2_LOGO);
+    if (logo) {
+      // Scale the 100x100 logo to desired display size.
+      gfx::ImageSkia scaled = gfx::ImageSkiaOperations::CreateResizedImage(
+          *logo, skia::ImageOperations::RESIZE_BEST,
+          gfx::Size(kLogoSize, kLogoSize));
+      SetImage(ui::ImageModel::FromImageSkia(scaled));
+    }
+    SetPreferredSize(gfx::Size(kLogoSize, kLogoSize));
+  }
+};
+
+BEGIN_METADATA(Allow2LogoView)
+END_METADATA
+
+// RoundAvatarView - A circular view with initials and background color.
+class RoundAvatarView : public views::View {
+  METADATA_HEADER(RoundAvatarView, views::View)
+
+ public:
+  RoundAvatarView(const std::u16string& initials, SkColor bg_color)
+      : initials_(initials), bg_color_(bg_color) {
+    SetPreferredSize(gfx::Size(kAvatarSize, kAvatarSize));
+  }
+
+  void OnPaint(gfx::Canvas* canvas) override {
+    // Draw circular background.
+    cc::PaintFlags flags;
+    flags.setAntiAlias(true);
+    flags.setColor(bg_color_);
+    flags.setStyle(cc::PaintFlags::kFill_Style);
+
+    gfx::Rect bounds = GetLocalBounds();
+    int radius = std::min(bounds.width(), bounds.height()) / 2;
+    canvas->DrawCircle(bounds.CenterPoint(), radius, flags);
+
+    // Draw initials.
+    if (!initials_.empty()) {
+      gfx::FontList font_list =
+          gfx::FontList().DeriveWithSizeDelta(6).DeriveWithWeight(
+              gfx::Font::Weight::BOLD);
+      canvas->DrawStringRectWithFlags(
+          initials_, font_list, SK_ColorWHITE, bounds,
+          gfx::Canvas::TEXT_ALIGN_CENTER | gfx::Canvas::NO_SUBPIXEL_RENDERING);
+    }
+  }
+
+ private:
+  std::u16string initials_;
+  SkColor bg_color_;
+};
+
+BEGIN_METADATA(RoundAvatarView)
+END_METADATA
+
 // ChildButton implementation.
+
+// static
+std::u16string Allow2ChildSelectView::ChildButton::GetInitials(
+    const std::string& name) {
+  std::u16string initials;
+  std::u16string name16 = base::UTF8ToUTF16(name);
+
+  // Get first letter of first two words.
+  bool in_word = false;
+  int word_count = 0;
+  for (char16_t c : name16) {
+    if (c == ' ' || c == '\t') {
+      in_word = false;
+    } else if (!in_word) {
+      in_word = true;
+      word_count++;
+      if (word_count <= 2) {
+        initials += std::towupper(c);
+      }
+    }
+  }
+
+  // If only one letter, just use that.
+  if (initials.empty() && !name16.empty()) {
+    initials = std::u16string(1, std::towupper(name16[0]));
+  }
+
+  return initials;
+}
+
+// static
+SkColor Allow2ChildSelectView::ChildButton::GetAvatarColor(const Child& child) {
+  // If child has an assigned color, use it.
+  if (!child.color.empty()) {
+    // Try to parse hex color (e.g., "#FF5733").
+    if (child.color[0] == '#' && child.color.length() == 7) {
+      uint32_t hex_value = 0;
+      if (base::HexStringToUInt(child.color.substr(1), &hex_value)) {
+        return SkColorSetRGB((hex_value >> 16) & 0xFF,
+                             (hex_value >> 8) & 0xFF,
+                             hex_value & 0xFF);
+      }
+    }
+    // Try to parse as color index (0-9).
+    int index = 0;
+    if (base::StringToInt(child.color, &index) && index >= 0 &&
+        static_cast<size_t>(index) < kNumAvatarColors) {
+      return kAvatarColors.at(static_cast<size_t>(index));
+    }
+  }
+
+  // Default: use child ID to pick a consistent color.
+  return kAvatarColors.at(child.id % kNumAvatarColors);
+}
+
+std::unique_ptr<views::View> Allow2ChildSelectView::ChildButton::CreateAvatarView(
+    const Child& child) {
+  // TODO: If avatar_url is set, load and display the image.
+  // For now, use initials with color.
+  std::u16string initials = GetInitials(child.name);
+  SkColor color = GetAvatarColor(child);
+  return std::make_unique<RoundAvatarView>(initials, color);
+}
 
 Allow2ChildSelectView::ChildButton::ChildButton(
     const Child& child,
@@ -76,9 +231,8 @@ Allow2ChildSelectView::ChildButton::ChildButton(
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
 
-  // Avatar placeholder (emoji for now).
-  auto* avatar_label = AddChildView(std::make_unique<views::Label>(u"\U0001F464"));
-  avatar_label->SetFontList(gfx::FontList().DeriveWithSizeDelta(20));
+  // Round avatar with initials and color.
+  avatar_view_ = AddChildView(CreateAvatarView(child));
 
   // Child name.
   name_label_ = AddChildView(
@@ -124,6 +278,7 @@ END_METADATA
 // static
 void Allow2ChildSelectView::Show(Browser* browser,
                                  const std::vector<Child>& children,
+                                 const std::string& owner_name,
                                  ChildSelectedCallback child_selected_callback,
                                  GuestCallback guest_callback) {
   if (!browser || children.empty()) {
@@ -131,7 +286,7 @@ void Allow2ChildSelectView::Show(Browser* browser,
   }
 
   auto* view =
-      new Allow2ChildSelectView(browser, children,
+      new Allow2ChildSelectView(browser, children, owner_name,
                                 std::move(child_selected_callback),
                                 std::move(guest_callback));
 
@@ -150,10 +305,12 @@ bool Allow2ChildSelectView::IsShowing() {
 Allow2ChildSelectView::Allow2ChildSelectView(
     Browser* browser,
     const std::vector<Child>& children,
+    const std::string& owner_name,
     ChildSelectedCallback child_selected_callback,
     GuestCallback guest_callback)
     : browser_(browser),
       children_(children),
+      owner_name_(owner_name),
       child_selected_callback_(std::move(child_selected_callback)),
       guest_callback_(std::move(guest_callback)) {
   // Configure dialog.
@@ -167,6 +324,11 @@ Allow2ChildSelectView::Allow2ChildSelectView(
   layout->set_main_axis_alignment(views::BoxLayout::MainAxisAlignment::kCenter);
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
+
+  // Allow2 logo.
+  // TODO: Replace placeholder with actual Allow2 vector icon from iOS assets.
+  // See: /mnt/ai/allow2/iOS/Allow2/Backgrounds.xcassets/whitelogo.imageset/logo.pdf
+  logo_view_ = AddChildView(std::make_unique<Allow2LogoView>());
 
   // Title: "Who's using Brave?"
   title_label_ =
@@ -196,16 +358,17 @@ Allow2ChildSelectView::Allow2ChildSelectView(
     child_buttons_.push_back(button);
   }
 
-  // Add Guest option.
-  Child guest_child;
-  guest_child.id = 0;
-  guest_child.name = "Guest";
-  auto* guest_button = children_container_->AddChildView(
+  // Add account owner option (shows owner's name instead of "Guest").
+  Child owner_child;
+  owner_child.id = 0;
+  owner_child.name = owner_name_.empty() ? "Parent" : owner_name_;
+  owner_child.color = "#607D8B";  // Blue Grey for owner/parent
+  auto* owner_button = children_container_->AddChildView(
       std::make_unique<ChildButton>(
-          guest_child,
+          owner_child,
           base::BindRepeating(&Allow2ChildSelectView::OnChildSelected,
                               base::Unretained(this))));
-  child_buttons_.push_back(guest_button);
+  child_buttons_.push_back(owner_button);
 
   // PIN entry container (initially hidden).
   pin_container_ = AddChildView(std::make_unique<views::View>());
@@ -251,12 +414,12 @@ Allow2ChildSelectView::Allow2ChildSelectView(
 
   // Helpful text.
   auto* help_label = AddChildView(std::make_unique<views::Label>(
-      u"This helps track time limits and keep you safe"));
+      u"Choose an account to start browsing."));
   help_label->SetEnabledColor(kTextColor);
   help_label->SetFontList(gfx::FontList().DeriveWithSizeDelta(-2));
 
-  // Set preferred size.
-  SetPreferredSize(gfx::Size(kDialogWidth, 350));
+  // Set preferred size (increased for logo).
+  SetPreferredSize(gfx::Size(kDialogWidth, 420));
 }
 
 Allow2ChildSelectView::~Allow2ChildSelectView() {
@@ -294,13 +457,9 @@ bool Allow2ChildSelectView::HandleKeyEvent(views::Textfield* sender,
 }
 
 void Allow2ChildSelectView::OnChildSelected(uint64_t child_id) {
-  // If selecting Guest (id=0), handle differently.
-  if (child_id == 0) {
-    OnGuestClicked();
-    return;
-  }
-
   // Update selection state.
+  // Both children (id > 0) and parent/owner (id = 0) require PIN entry.
+  // No one gets immediate access without authentication.
   selected_child_id_ = child_id;
 
   // Update button visuals.
@@ -308,7 +467,7 @@ void Allow2ChildSelectView::OnChildSelected(uint64_t child_id) {
     button->SetSelected(button->child_id() == child_id);
   }
 
-  // Show PIN entry.
+  // Show PIN entry - required for everyone.
   UpdatePinVisibility();
 }
 

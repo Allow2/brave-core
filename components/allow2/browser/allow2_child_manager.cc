@@ -277,6 +277,16 @@ void Allow2ChildManager::LoadChildrenFromPrefs() {
       child.avatar_url = *avatar_url;
     }
 
+    // Linked account ID (if child has their own Allow2 account)
+    child.linked_account_id =
+        static_cast<uint64_t>(dict.FindInt("linkedAccountId").value_or(0));
+
+    // Assigned color (hex string or empty)
+    const std::string* color = dict.FindString("color");
+    if (color) {
+      child.color = *color;
+    }
+
     // Check if child has their own Allow2 account (can use push auth)
     child.has_account = dict.FindBool("hasAccount").value_or(false);
 
@@ -295,6 +305,12 @@ void Allow2ChildManager::SaveChildrenToPrefs() {
     child_dict.Set("pinSalt", child.pin_salt);
     if (!child.avatar_url.empty()) {
       child_dict.Set("avatarUrl", child.avatar_url);
+    }
+    if (child.linked_account_id > 0) {
+      child_dict.Set("linkedAccountId", static_cast<int>(child.linked_account_id));
+    }
+    if (!child.color.empty()) {
+      child_dict.Set("color", child.color);
     }
     child_dict.Set("hasAccount", child.has_account);
     children_list.Append(std::move(child_dict));

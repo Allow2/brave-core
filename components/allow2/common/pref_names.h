@@ -69,6 +69,17 @@ inline constexpr char kAllow2DeviceName[] = "brave.allow2.device_name";
 // Timestamp when device was paired.
 inline constexpr char kAllow2PairedAt[] = "brave.allow2.paired_at";
 
+// Name of the account owner (controller account name).
+// Displayed in child selection dialog instead of "Guest".
+inline constexpr char kAllow2AccountOwnerName[] = "brave.allow2.account_owner_name";
+
+// Owner/parent PIN hash for authentication on shared devices.
+// Parents must also authenticate before browsing.
+inline constexpr char kAllow2OwnerPinHash[] = "brave.allow2.owner_pin_hash";
+
+// Salt for owner PIN hash.
+inline constexpr char kAllow2OwnerPinSalt[] = "brave.allow2.owner_pin_salt";
+
 // ============================================================================
 // Offline cache (stored in local_state for persistence)
 // ============================================================================

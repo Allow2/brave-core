@@ -12,6 +12,7 @@
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "brave/components/allow2/browser/allow2_api_client.h"
 #include "brave/components/allow2/browser/allow2_block_overlay.h"
 #include "brave/components/allow2/browser/allow2_child_manager.h"
@@ -426,10 +427,39 @@ std::vector<Child> Allow2Service::GetChildren() const {
       child.pin_salt = *pin_salt;
     }
 
+    // Avatar URL (from linked account or child entity).
+    const std::string* avatar_url = dict.FindString("avatarUrl");
+    if (avatar_url) {
+      child.avatar_url = *avatar_url;
+    }
+
+    // Linked account ID (if child has their own Allow2 account).
+    child.linked_account_id =
+        static_cast<uint64_t>(dict.FindInt("linkedAccountId").value_or(0));
+
+    // Assigned color (hex string or index).
+    const std::string* color = dict.FindString("color");
+    if (color) {
+      child.color = *color;
+    }
+
+    // Whether child has their own account.
+    child.has_account = dict.FindBool("hasAccount").value_or(false);
+
     children.push_back(child);
   }
 
   return children;
+}
+
+std::string Allow2Service::GetAccountOwnerName() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (!local_state_) {
+    return std::string();
+  }
+
+  return local_state_->GetString(prefs::kAllow2AccountOwnerName);
 }
 
 bool Allow2Service::IsSharedDeviceMode() const {
@@ -440,6 +470,59 @@ bool Allow2Service::IsSharedDeviceMode() const {
 bool Allow2Service::SelectChild(uint64_t child_id, const std::string& pin) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  // Handle parent/owner selection (child_id == 0).
+  // Parents also require authentication on shared devices.
+  if (child_id == 0) {
+    if (!local_state_) {
+      LOG(WARNING) << "Allow2: Local state not available for owner auth";
+      return false;
+    }
+
+    std::string owner_pin_hash =
+        local_state_->GetString(prefs::kAllow2OwnerPinHash);
+    std::string owner_pin_salt =
+        local_state_->GetString(prefs::kAllow2OwnerPinSalt);
+
+    // If owner PIN is not set, set it from this first authentication.
+    // This allows the parent to set their PIN on first use.
+    if (owner_pin_hash.empty() || owner_pin_salt.empty()) {
+      // Generate salt and hash the PIN.
+      owner_pin_salt = base::Uuid::GenerateRandomV4().AsLowercaseString();
+      owner_pin_hash = HashPin(pin, owner_pin_salt);
+
+      local_state_->SetString(prefs::kAllow2OwnerPinHash, owner_pin_hash);
+      local_state_->SetString(prefs::kAllow2OwnerPinSalt, owner_pin_salt);
+
+      LOG(INFO) << "Allow2: Owner PIN set for first time";
+    } else {
+      // Validate the entered PIN against stored hash.
+      if (!ValidatePinHash(pin, owner_pin_hash, owner_pin_salt)) {
+        LOG(WARNING) << "Allow2: Invalid PIN for owner";
+        return false;
+      }
+    }
+
+    // Set child_id to 0 (owner/parent mode).
+    profile_prefs_->SetString(prefs::kAllow2ChildId, "0");
+
+    // Create a pseudo-child for the owner to pass to observers.
+    Child owner_child;
+    owner_child.id = 0;
+    owner_child.name = GetAccountOwnerName();
+    if (owner_child.name.empty()) {
+      owner_child.name = "Parent";
+    }
+
+    // Notify observers.
+    for (auto& observer : observers_) {
+      observer.OnCurrentChildChanged(owner_child);
+    }
+
+    LOG(INFO) << "Allow2: Owner/parent authenticated";
+    return true;
+  }
+
+  // Handle child selection (child_id > 0).
   auto children = GetChildren();
   for (const auto& child : children) {
     if (child.id == child_id) {

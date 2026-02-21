@@ -66,6 +66,10 @@ class Allow2TabHelper
   // Show block overlay if needed.
   void MaybeShowBlockOverlay();
 
+  // Show child selection shield if needed.
+  // Returns true if shield is shown (navigation should be blocked).
+  bool MaybeShowChildShield();
+
   // Hide block overlay.
   void DismissBlockOverlay();
 

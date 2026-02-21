@@ -4,6 +4,10 @@ Brave Core is a set of changes, APIs, and scripts used for customizing Chromium 
 
 Follow [@brave](https://twitter.com/brave) on Twitter for important announcements.
 
+## Allow2 Parental Controls
+
+This fork includes Allow2 parental controls integration. See [components/allow2/docs/ALLOW2.md](components/allow2/docs/ALLOW2.md) for developer documentation.
+
 ## Resources
 
 - [Issues](https://github.com/brave/brave-browser/issues)

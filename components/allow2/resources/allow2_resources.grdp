@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<grit-part>
+  <!-- Allow2 Parental Controls resources -->
+  <include name="IDR_ALLOW2_LOGO" file="../allow2/resources/allow2_logo.png" type="BINDATA" />
+</grit-part>

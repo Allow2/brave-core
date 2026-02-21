@@ -12,6 +12,7 @@
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
+#include "brave/browser/allow2/allow2_tab_helper.h"
 #include "brave/browser/brave_browser_process.h"
 #include "brave/browser/brave_rewards/rewards_tab_helper.h"
 #include "brave/browser/brave_shields/brave_shields_web_contents_observer.h"
@@ -144,6 +145,9 @@ void AttachTabHelpers(content::WebContents* web_contents) {
 #endif
 
   brave_rewards::RewardsTabHelper::CreateForWebContents(web_contents);
+
+  // Allow2 parental controls - must be early to show child shield before browsing
+  allow2::Allow2TabHelper::CreateForWebContents(web_contents);
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
   content::BrowserContext* context = web_contents->GetBrowserContext();

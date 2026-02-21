@@ -34,6 +34,12 @@ struct ChildInfo {
   std::string pin_salt;
   std::string avatar_url;  // Optional avatar URL
 
+  // Linked Allow2 account ID (if child has their own account).
+  uint64_t linked_account_id = 0;
+
+  // Assigned color (hex string like "#FF5733" or index 0-9).
+  std::string color;
+
   // True if child has their own Allow2 account (can use push authentication).
   // False for "name-only" children who can only use PIN.
   bool has_account = false;

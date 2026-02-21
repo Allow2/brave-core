@@ -40,6 +40,11 @@ void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
   registry->RegisterStringPref(prefs::kAllow2DeviceToken, std::string());
   registry->RegisterStringPref(prefs::kAllow2DeviceName, std::string());
   registry->RegisterTimePref(prefs::kAllow2PairedAt, base::Time());
+  registry->RegisterStringPref(prefs::kAllow2AccountOwnerName, std::string());
+
+  // Owner/parent PIN for shared device authentication.
+  registry->RegisterStringPref(prefs::kAllow2OwnerPinHash, std::string());
+  registry->RegisterStringPref(prefs::kAllow2OwnerPinSalt, std::string());
 
   // Offline cache data.
   registry->RegisterStringPref(prefs::kAllow2OfflineCache, std::string());

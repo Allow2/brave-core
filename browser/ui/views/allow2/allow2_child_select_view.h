@@ -45,8 +45,10 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
   using GuestCallback = base::OnceClosure;
 
   // Shows the child selection dialog for the given browser.
+  // |owner_name| is the name of the account owner (shown instead of "Guest").
   static void Show(Browser* browser,
                    const std::vector<Child>& children,
+                   const std::string& owner_name,
                    ChildSelectedCallback child_selected_callback,
                    GuestCallback guest_callback);
 
@@ -57,7 +59,7 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
   Allow2ChildSelectView& operator=(const Allow2ChildSelectView&) = delete;
 
  private:
-  // Represents a clickable child button.
+  // Represents a clickable child button with round avatar.
   class ChildButton : public views::View {
     METADATA_HEADER(ChildButton, views::View)
 
@@ -75,14 +77,25 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
     bool OnMousePressed(const ui::MouseEvent& event) override;
 
    private:
+    // Create round avatar view with initials and color.
+    std::unique_ptr<views::View> CreateAvatarView(const Child& child);
+
+    // Get initials from name (first letter of first two words).
+    static std::u16string GetInitials(const std::string& name);
+
+    // Get color for avatar background.
+    static SkColor GetAvatarColor(const Child& child);
+
     uint64_t child_id_ = 0;
     bool selected_ = false;
     base::RepeatingCallback<void(uint64_t)> on_click_;
+    raw_ptr<views::View> avatar_view_ = nullptr;
     raw_ptr<views::Label> name_label_ = nullptr;
   };
 
   Allow2ChildSelectView(Browser* browser,
                         const std::vector<Child>& children,
+                        const std::string& owner_name,
                         ChildSelectedCallback child_selected_callback,
                         GuestCallback guest_callback);
   ~Allow2ChildSelectView() override;
@@ -116,9 +129,11 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
 
   raw_ptr<Browser> browser_ = nullptr;
   std::vector<Child> children_;
+  std::string owner_name_;
   std::optional<uint64_t> selected_child_id_;
   std::vector<raw_ptr<ChildButton>> child_buttons_;
 
+  raw_ptr<views::View> logo_view_ = nullptr;
   raw_ptr<views::Label> title_label_ = nullptr;
   raw_ptr<views::View> children_container_ = nullptr;
   raw_ptr<views::View> pin_container_ = nullptr;

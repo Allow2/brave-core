@@ -61,6 +61,15 @@ struct Child {
   std::string pin_hash;
   std::string pin_salt;
 
+  // Avatar URL (from linked account or child entity).
+  std::string avatar_url;
+
+  // Linked Allow2 account ID (if child has their own account).
+  uint64_t linked_account_id = 0;
+
+  // Assigned color (hex string like "#FF5733" or index 0-9).
+  std::string color;
+
   // True if child has their own Allow2 account (can use push authentication).
   // False for "name-only" children who can only use PIN.
   bool has_account = false;
@@ -195,6 +204,9 @@ class Allow2Service : public KeyedService,
 
   // Get the list of children associated with the paired account.
   std::vector<Child> GetChildren() const;
+
+  // Get the name of the account owner (controller).
+  std::string GetAccountOwnerName() const;
 
   // ============================================================================
   // Child Selection (Shared Device Mode)

@@ -5,8 +5,10 @@
 
 #include "brave/browser/allow2/allow2_tab_helper.h"
 
+#include "base/logging.h"
 #include "brave/browser/allow2/allow2_service_factory.h"
 #include "brave/components/allow2/browser/allow2_block_overlay.h"
+#include "brave/components/allow2/browser/allow2_child_shield.h"
 #include "brave/components/allow2/browser/allow2_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -17,6 +19,7 @@
 
 #if defined(TOOLKIT_VIEWS)
 #include "brave/browser/allow2/allow2_block_view_delegate.h"
+#include "brave/browser/ui/views/allow2/allow2_child_select_view.h"
 #endif
 
 namespace allow2 {
@@ -37,7 +40,11 @@ Allow2TabHelper* Allow2TabHelper::GetOrCreate(content::WebContents* contents) {
 
 Allow2TabHelper::Allow2TabHelper(content::WebContents* contents)
     : content::WebContentsObserver(contents),
-      content::WebContentsUserData<Allow2TabHelper>(*contents) {}
+      content::WebContentsUserData<Allow2TabHelper>(*contents) {
+  // Check for child shield immediately on tab helper creation.
+  // This handles browser startup with existing tabs.
+  MaybeShowChildShield();
+}
 
 Allow2TabHelper::~Allow2TabHelper() = default;
 
@@ -48,6 +55,14 @@ void Allow2TabHelper::DidFinishNavigation(
   }
 
   if (!navigation_handle->HasCommitted()) {
+    return;
+  }
+
+  // CRITICAL: Check if child shield should be shown BEFORE allowing navigation.
+  // This ensures no browsing happens without child selection on paired devices.
+  if (MaybeShowChildShield()) {
+    // Child shield is showing - don't proceed with normal navigation handling
+    // until a child is selected and authenticated.
     return;
   }
 
@@ -65,7 +80,9 @@ void Allow2TabHelper::DidFinishNavigation(
 }
 
 void Allow2TabHelper::DidStartLoading() {
-  // Could show a pre-navigation check here if needed.
+  // CRITICAL: Check for child shield on EVERY page load start.
+  // This catches browser startup and new tab scenarios.
+  MaybeShowChildShield();
 }
 
 void Allow2TabHelper::DidStopLoading() {
@@ -146,6 +163,74 @@ void Allow2TabHelper::MaybeShowBlockOverlay() {
 
   // Use the service to show the overlay (which will use the delegate).
   service->ShowBlockOverlay();
+}
+
+bool Allow2TabHelper::MaybeShowChildShield() {
+  Allow2Service* service = GetService();
+  if (!service) {
+    return false;
+  }
+
+  // Check if we need to show the child selection shield
+  if (!service->ShouldShowChildShield()) {
+    return false;
+  }
+
+#if defined(TOOLKIT_VIEWS)
+  // Check if view is already showing
+  if (Allow2ChildSelectView::IsShowing()) {
+    return true;  // Already showing, still block navigation
+  }
+
+  // Find the browser for this tab
+  Browser* browser = chrome::FindBrowserWithTab(web_contents());
+  if (!browser) {
+    LOG(WARNING) << "Allow2: No browser found for child shield";
+    return false;
+  }
+
+  LOG(INFO) << "Allow2: Showing child selection shield";
+
+  // Get children list from service
+  std::vector<Child> children = service->GetChildren();
+  if (children.empty()) {
+    LOG(WARNING) << "Allow2: No children configured, skipping shield";
+    return false;
+  }
+
+  // Get owner name for display (shows instead of "Guest")
+  std::string owner_name = service->GetAccountOwnerName();
+
+  // Show the child selection view
+  Allow2ChildSelectView::Show(
+      browser,
+      children,
+      owner_name,
+      // Child selected callback
+      base::BindOnce(
+          [](base::WeakPtr<Allow2Service> weak_service,
+             uint64_t child_id, const std::string& pin) {
+            if (weak_service) {
+              // Validate PIN and select child
+              if (weak_service->SelectChild(child_id, pin)) {
+                LOG(INFO) << "Allow2: Child " << child_id << " selected and authenticated";
+              } else {
+                LOG(WARNING) << "Allow2: Invalid PIN for child " << child_id;
+              }
+            }
+          },
+          service->GetWeakPtr()),
+      // Owner callback (used when parent/owner is selected)
+      base::DoNothing());
+
+  // Update the child shield controller state
+  service->ShowChildShield();
+  return true;
+#else
+  // Non-Views builds just call the service method
+  service->ShowChildShield();
+  return true;
+#endif
 }
 
 #if defined(TOOLKIT_VIEWS)
