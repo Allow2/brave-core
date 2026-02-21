@@ -388,8 +388,8 @@ bool Allow2OfflineCrypto::ConstantTimeCompare(const std::string& a,
   }
 
   return crypto::SecureMemEqual(
-      base::as_bytes(base::make_span(a)),
-      base::as_bytes(base::make_span(b)));
+      base::as_byte_span(a),
+      base::as_byte_span(b));
 }
 
 // static

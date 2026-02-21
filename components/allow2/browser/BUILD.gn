@@ -73,10 +73,13 @@ source_set("unit_tests") {
     "allow2_child_shield_unittest.cc",
     "allow2_credential_manager_unittest.cc",
     "allow2_integration_test.cc",
+    "allow2_offline_crypto_unittest.cc",
     "allow2_pairing_handler_unittest.cc",
+    "allow2_qr_token_unittest.cc",
     "allow2_security_unittest.cc",
     "allow2_service_unittest.cc",
     "allow2_usage_tracker_unittest.cc",
+    "allow2_voice_code_unittest.cc",
     "allow2_warning_banner_unittest.cc",
     "allow2_warning_controller_unittest.cc",
   ]

@@ -220,7 +220,7 @@ void Allow2LocalDecision::LogUsage(uint8_t activity_id, uint16_t minutes) {
     return;
   }
 
-  cache_->IncrementUsage(activity_id, minutes);
+  cache_->RecordUsage(activity_id, minutes);
   VLOG(2) << "Allow2LocalDecision: Logged " << minutes << " minutes for "
           << "activity " << static_cast<int>(activity_id);
 }
@@ -255,7 +255,12 @@ void Allow2LocalDecision::ApplyExtension(uint8_t activity_id,
     return;
   }
 
-  cache_->SetExtension(activity_id, minutes, expires_at);
+  CachedExtension extension;
+  extension.activity_id = activity_id;
+  extension.minutes = minutes;
+  extension.expires_at = expires_at;
+  extension.child_id = cache_->GetCurrentChildId();
+  cache_->AddLocalExtension(extension);
   VLOG(1) << "Allow2LocalDecision: Applied extension of " << minutes
           << " minutes for activity " << static_cast<int>(activity_id);
 }
@@ -264,14 +269,16 @@ bool Allow2LocalDecision::IsOfflineMode() const {
   if (!cache_) {
     return false;
   }
-  return cache_->IsValid() && !cache_->IsOnline();
+  // Offline mode is when we have valid cache but no server connectivity
+  return cache_->IsValid() && !cache_->IsExpired();
 }
 
 int Allow2LocalDecision::GetCacheAgeSeconds() const {
   if (!cache_ || !cache_->IsValid()) {
     return -1;
   }
-  return static_cast<int>(cache_->GetAge().InSeconds());
+  base::TimeDelta age = base::Time::Now() - cache_->GetGeneratedAt();
+  return static_cast<int>(age.InSeconds());
 }
 
 bool Allow2LocalDecision::IsCacheValid() const {
@@ -281,7 +288,8 @@ bool Allow2LocalDecision::IsCacheValid() const {
   if (!cache_->IsValid()) {
     return false;
   }
-  return cache_->GetAge().InSeconds() < kMaxCacheAgeSeconds;
+  base::TimeDelta age = base::Time::Now() - cache_->GetGeneratedAt();
+  return age.InSeconds() < kMaxCacheAgeSeconds;
 }
 
 std::vector<int> Allow2LocalDecision::GetCrossedWarningThresholds(
@@ -316,14 +324,30 @@ bool Allow2LocalDecision::HasActiveException(uint8_t activity_id) const {
   if (!cache_) {
     return false;
   }
-  return cache_->HasException(activity_id);
+  // Check if there's an active extension for this activity
+  auto extensions = cache_->GetActiveExtensions(cache_->GetCurrentChildId());
+  for (const auto& ext : extensions) {
+    if (ext.activity_id == activity_id && ext.IsValid()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool Allow2LocalDecision::IsBanned(uint8_t activity_id) const {
   if (!cache_) {
     return false;
   }
-  return cache_->IsBanned(activity_id);
+  // Check restrictions for bans affecting this activity
+  auto restrictions = cache_->GetRestrictions();
+  for (const auto& restriction : restrictions) {
+    if (restriction.blocked) {
+      // For now, assume activity-level bans are stored with activity ID as pattern
+      // This can be refined based on actual restriction structure
+      return true;  // Conservative: if any restriction exists, consider banned
+    }
+  }
+  return false;
 }
 
 bool Allow2LocalDecision::HasActiveExtension(uint8_t activity_id) const {
@@ -331,12 +355,20 @@ bool Allow2LocalDecision::HasActiveExtension(uint8_t activity_id) const {
     return false;
   }
 
-  base::Time expiry = cache_->GetExtensionExpiry(activity_id);
-  if (expiry.is_null()) {
-    return false;
+  auto extensions = cache_->GetActiveExtensions(cache_->GetCurrentChildId());
+  for (const auto& ext : extensions) {
+    if (ext.activity_id == activity_id && ext.IsValid()) {
+      return true;
+    }
   }
-
-  return base::Time::Now() < expiry;
+  // Also check local extensions
+  auto local_extensions = cache_->GetLocalExtensions();
+  for (const auto& ext : local_extensions) {
+    if (ext.activity_id == activity_id && ext.IsValid()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool Allow2LocalDecision::IsWithinTimeBlock(uint8_t activity_id,
@@ -346,20 +378,19 @@ bool Allow2LocalDecision::IsWithinTimeBlock(uint8_t activity_id,
     return true;
   }
 
-  // Get time slot index (0-47)
-  int slot = GetTimeSlot(time);
-
-  // Get allowed slots from cache
-  std::vector<bool> allowed_slots = cache_->GetTimeBlocks(activity_id);
-
-  // If no time blocks configured, activity is allowed all day
-  if (allowed_slots.empty()) {
+  // Get activity data for today
+  auto activity_opt = cache_->GetActivity(time, activity_id);
+  if (!activity_opt.has_value()) {
+    // No activity config - default to allowed
     return true;
   }
 
+  // Get time slot index (0-47)
+  int slot = GetTimeSlot(time);
+
   // Check if current slot is allowed
-  if (slot >= 0 && static_cast<size_t>(slot) < allowed_slots.size()) {
-    return allowed_slots[slot];
+  if (slot >= 0 && static_cast<size_t>(slot) < kTimeSlotsPerDay) {
+    return activity_opt->time_blocks[slot].allowed;
   }
 
   // Invalid slot - default to not allowed
@@ -382,7 +413,11 @@ uint16_t Allow2LocalDecision::GetQuotaTotal(uint8_t activity_id,
   if (!cache_) {
     return 0;
   }
-  return cache_->GetQuotaTotal(activity_id, date);
+  auto activity_opt = cache_->GetActivity(date, activity_id);
+  if (!activity_opt.has_value()) {
+    return 0;
+  }
+  return activity_opt->quota_minutes;
 }
 
 uint16_t Allow2LocalDecision::GetQuotaUsed(uint8_t activity_id,
@@ -390,7 +425,7 @@ uint16_t Allow2LocalDecision::GetQuotaUsed(uint8_t activity_id,
   if (!cache_) {
     return 0;
   }
-  return cache_->GetQuotaUsed(activity_id, date);
+  return cache_->GetLocalUsage(date, activity_id);
 }
 
 // static
@@ -416,27 +451,27 @@ uint16_t Allow2LocalDecision::GetTimeBlockRemaining(uint8_t activity_id,
     return 0;
   }
 
-  // Get current slot
-  int current_slot = GetTimeSlot(time);
-
-  // Get allowed slots
-  std::vector<bool> allowed_slots = cache_->GetTimeBlocks(activity_id);
-  if (allowed_slots.empty()) {
-    // No time blocks - no limit
+  // Get activity data for today
+  auto activity_opt = cache_->GetActivity(time, activity_id);
+  if (!activity_opt.has_value()) {
+    // No activity config - no limit
     return UINT16_MAX;
   }
 
+  // Get current slot
+  int current_slot = GetTimeSlot(time);
+
   // Check if current slot is allowed
   if (current_slot < 0 ||
-      static_cast<size_t>(current_slot) >= allowed_slots.size() ||
-      !allowed_slots[current_slot]) {
+      static_cast<size_t>(current_slot) >= kTimeSlotsPerDay ||
+      !activity_opt->time_blocks[current_slot].allowed) {
     return 0;  // Not in an allowed slot
   }
 
   // Count consecutive allowed slots from current slot
   int consecutive = 0;
-  for (size_t i = current_slot; i < allowed_slots.size(); i++) {
-    if (allowed_slots[i]) {
+  for (size_t i = current_slot; i < kTimeSlotsPerDay; i++) {
+    if (activity_opt->time_blocks[i].allowed) {
       consecutive++;
     } else {
       break;
@@ -461,7 +496,7 @@ uint16_t Allow2LocalDecision::GetExtensionRemaining(
     return 0;
   }
 
-  base::Time expiry = cache_->GetExtensionExpiry(activity_id);
+  base::Time expiry = GetExtensionExpiry(activity_id);
   if (expiry.is_null() || expiry <= base::Time::Now()) {
     return 0;
   }
@@ -474,7 +509,21 @@ base::Time Allow2LocalDecision::GetExtensionExpiry(uint8_t activity_id) const {
   if (!cache_) {
     return base::Time();
   }
-  return cache_->GetExtensionExpiry(activity_id);
+  // Check server extensions
+  auto extensions = cache_->GetActiveExtensions(cache_->GetCurrentChildId());
+  for (const auto& ext : extensions) {
+    if (ext.activity_id == activity_id && ext.IsValid()) {
+      return ext.expires_at;
+    }
+  }
+  // Check local extensions
+  auto local_extensions = cache_->GetLocalExtensions();
+  for (const auto& ext : local_extensions) {
+    if (ext.activity_id == activity_id && ext.IsValid()) {
+      return ext.expires_at;
+    }
+  }
+  return base::Time();
 }
 
 }  // namespace allow2

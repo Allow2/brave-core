@@ -133,7 +133,8 @@ class Allow2VoiceCodeView : public views::DialogDelegateView,
   std::string request_code_;
 
   // Activity information for display.
-  uint8_t activity_id_;
+  // TODO(allow2): Wire to Allow2VoiceCode service for validation
+  [[maybe_unused]] uint8_t activity_id_;
   std::string activity_name_;
   uint16_t minutes_requested_;
 

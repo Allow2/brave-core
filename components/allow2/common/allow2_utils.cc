@@ -35,10 +35,20 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
 }
 
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
+  // Sensitive credentials (encrypted via OSCrypt).
   registry->RegisterStringPref(prefs::kAllow2Credentials, std::string());
   registry->RegisterStringPref(prefs::kAllow2DeviceToken, std::string());
   registry->RegisterStringPref(prefs::kAllow2DeviceName, std::string());
   registry->RegisterTimePref(prefs::kAllow2PairedAt, base::Time());
+
+  // Offline cache data.
+  registry->RegisterStringPref(prefs::kAllow2OfflineCache, std::string());
+  registry->RegisterStringPref(prefs::kAllow2LocalUsage, std::string());
+  registry->RegisterStringPref(prefs::kAllow2LocalExtensions, std::string());
+  registry->RegisterStringPref(prefs::kAllow2DeficitPool, std::string());
+  registry->RegisterStringPref(prefs::kAllow2HomeTimezone, std::string());
+  registry->RegisterTimePref(prefs::kAllow2LastLocalDecision, base::Time());
+  registry->RegisterStringPref(prefs::kAllow2TimeWindows, std::string());
 }
 
 bool IsPaired(PrefService* local_state) {

@@ -261,7 +261,7 @@ void Allow2VoiceCodeView::UpdateOKButtonState() {
   if (lockout_until_ > base::Time::Now()) {
     enabled = false;
   } else {
-    std::u16string code = approval_code_field_->GetText();
+    std::u16string code(approval_code_field_->GetText());
     enabled = IsValidApprovalCodeFormat(code);
   }
 
@@ -367,7 +367,7 @@ void Allow2VoiceCodeView::SubmitApprovalCode() {
     return;
   }
 
-  std::u16string approval_code = approval_code_field_->GetText();
+  std::u16string approval_code(approval_code_field_->GetText());
 
   // Validate format.
   if (!IsValidApprovalCodeFormat(approval_code)) {

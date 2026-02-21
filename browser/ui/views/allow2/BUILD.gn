@@ -11,6 +11,8 @@ source_set("allow2") {
     "allow2_block_view.h",
     "allow2_child_select_view.cc",
     "allow2_child_select_view.h",
+    "allow2_grant_entry_view.cc",
+    "allow2_grant_entry_view.h",
     "allow2_pairing_view.cc",
     "allow2_pairing_view.h",
     "allow2_voice_code_view.cc",

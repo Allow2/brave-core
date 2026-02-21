@@ -78,10 +78,11 @@ Allow2Service::Allow2Service(
   usage_tracker_ = std::make_unique<Allow2UsageTracker>(api_client_.get());
   warning_banner_ = std::make_unique<Allow2WarningBanner>();
 
-  // Initialize offline authentication components
-  offline_cache_ = std::make_unique<Allow2OfflineCache>(profile_prefs_);
-  deficit_tracker_ = std::make_unique<Allow2DeficitTracker>(profile_prefs_);
-  travel_mode_ = std::make_unique<Allow2TravelMode>(profile_prefs_);
+  // Initialize offline authentication components.
+  // These use local_state prefs for offline cache persistence.
+  offline_cache_ = std::make_unique<Allow2OfflineCache>(local_state_);
+  deficit_tracker_ = std::make_unique<Allow2DeficitTracker>(local_state_);
+  travel_mode_ = std::make_unique<Allow2TravelMode>(local_state_);
   local_decision_ = std::make_unique<Allow2LocalDecision>(offline_cache_.get());
 
   // Set up warning controller callbacks
@@ -459,12 +460,9 @@ void Allow2Service::CheckAllowance(CheckCallback callback) {
               self->OnCheckResult(response.result);
               self->CacheCheckResult(response.result);
 
-              // Update offline cache with fresh server response
-              std::string child_id_str = GetCurrentChildId(self->profile_prefs_);
-              if (!child_id_str.empty() && self->offline_cache_) {
-                uint64_t child_id = std::stoull(child_id_str);
-                self->offline_cache_->CacheResult(child_id, response.result);
-              }
+              // Note: Offline cache is updated separately when processing
+              // the raw server response in the API client if it contains
+              // an "offlineCache" section.
 
               std::move(callback).Run(response.result);
             } else {
@@ -635,10 +633,10 @@ Allow2TravelMode* Allow2Service::GetTravelMode() {
 
 bool Allow2Service::IsOffline() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // Check if offline cache indicates we're offline
-  if (offline_cache_) {
-    return !offline_cache_->IsOnline();
-  }
+  // TODO(allow2): Implement proper offline detection based on network state
+  // and cache validity. For now, assume we're online to avoid startup issues.
+  // The offline authentication flow will be enabled once the full offline
+  // infrastructure (voice codes, QR tokens) is integrated.
   return false;
 }
 

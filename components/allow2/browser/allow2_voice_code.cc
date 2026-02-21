@@ -6,11 +6,11 @@
 #include "brave/components/allow2/browser/allow2_voice_code.h"
 
 #include <algorithm>
-#include <cstdio>
 
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "brave/components/allow2/browser/allow2_offline_crypto.h"
 #include "crypto/random.h"
@@ -31,9 +31,7 @@ int ParseDigit(char c) {
 
 // Format a number as a zero-padded string of the specified width.
 std::string FormatPadded(int value, int width) {
-  char buffer[16];
-  snprintf(buffer, sizeof(buffer), "%0*d", width, value);
-  return std::string(buffer);
+  return base::StringPrintf("%0*d", width, value);
 }
 
 }  // namespace
@@ -210,10 +208,10 @@ uint16_t Allow2VoiceCode::IncrementsToMinutes(uint8_t increments) {
 
 // static
 uint8_t Allow2VoiceCode::GenerateNonce() {
-  uint8_t random_byte;
-  crypto::RandBytes(base::span<uint8_t>(&random_byte, 1));
+  uint8_t random_bytes[1];
+  crypto::RandBytes(random_bytes);
   // Map 0-255 to 0-99
-  return random_byte % 100;
+  return random_bytes[0] % 100;
 }
 
 // static

@@ -12,8 +12,10 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "crypto/keypair.h"
@@ -485,10 +487,15 @@ std::optional<base::Time> Allow2QRToken::ParseIso8601(
     return std::nullopt;
   }
 
-  // Parse components
+  // Parse components using safe string-to-int conversion
+  // Format already validated above: YYYY-MM-DDTHH:MM:SSZ
   int year, month, day, hour, minute, second;
-  if (sscanf(timestamp.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d", &year, &month, &day,
-             &hour, &minute, &second) != 6) {
+  if (!base::StringToInt(timestamp.substr(0, 4), &year) ||
+      !base::StringToInt(timestamp.substr(5, 2), &month) ||
+      !base::StringToInt(timestamp.substr(8, 2), &day) ||
+      !base::StringToInt(timestamp.substr(11, 2), &hour) ||
+      !base::StringToInt(timestamp.substr(14, 2), &minute) ||
+      !base::StringToInt(timestamp.substr(17, 2), &second)) {
     return std::nullopt;
   }
 
@@ -520,12 +527,10 @@ std::string Allow2QRToken::FormatIso8601(base::Time time) {
   base::Time::Exploded exploded;
   time.UTCExplode(&exploded);
 
-  char buffer[32];
-  snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ",
-           exploded.year, exploded.month, exploded.day_of_month, exploded.hour,
-           exploded.minute, exploded.second);
-
-  return std::string(buffer);
+  return base::StringPrintf("%04d-%02d-%02dT%02d:%02d:%02dZ",
+                            exploded.year, exploded.month,
+                            exploded.day_of_month, exploded.hour,
+                            exploded.minute, exploded.second);
 }
 
 }  // namespace allow2
