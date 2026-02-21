@@ -64,57 +64,67 @@ Allow2Service::Allow2Service(
     : local_state_(local_state),
       profile_prefs_(profile_prefs),
       api_client_(std::make_unique<Allow2ApiClient>(url_loader_factory)),
-      credential_manager_(std::make_unique<Allow2CredentialManager>(local_state)),
-      warning_controller_(std::make_unique<Allow2WarningController>()) {
+      credential_manager_(std::make_unique<Allow2CredentialManager>(local_state)) {
   DCHECK(local_state_);
   DCHECK(profile_prefs_);
 
-  // Initialize all component managers
-  block_overlay_ = std::make_unique<Allow2BlockOverlay>();
-  child_manager_ = std::make_unique<Allow2ChildManager>(profile_prefs_);
-  child_shield_ = std::make_unique<Allow2ChildShield>(child_manager_.get());
+  // MINIMAL INIT: Only create components needed for pairing.
+  // All tracking components are created lazily when device is paired.
   pairing_handler_ = std::make_unique<Allow2PairingHandler>(
       api_client_.get(), credential_manager_.get());
-  usage_tracker_ = std::make_unique<Allow2UsageTracker>(api_client_.get());
-  warning_banner_ = std::make_unique<Allow2WarningBanner>();
 
-  // Initialize offline authentication components.
+  // If already paired, initialize tracking components.
+  if (IsPaired()) {
+    InitializeTrackingComponents();
+  }
+}
+
+Allow2Service::~Allow2Service() {
+  TeardownTrackingObservers();
+}
+
+void Allow2Service::Shutdown() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  TeardownTrackingObservers();
+  StopCheckTimer();
+  StopTracking();
+  observers_.Clear();
+}
+
+void Allow2Service::InitializeTrackingComponents() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (tracking_initialized_) {
+    return;  // Already initialized
+  }
+
+  LOG(INFO) << "Allow2: Initializing tracking components (device is paired)";
+
+  // Create child management components.
+  child_manager_ = std::make_unique<Allow2ChildManager>(profile_prefs_);
+  child_shield_ = std::make_unique<Allow2ChildShield>(child_manager_.get());
+
+  // Create usage tracking and UI components.
+  usage_tracker_ = std::make_unique<Allow2UsageTracker>(api_client_.get());
+  warning_controller_ = std::make_unique<Allow2WarningController>();
+  warning_banner_ = std::make_unique<Allow2WarningBanner>();
+  block_overlay_ = std::make_unique<Allow2BlockOverlay>();
+
+  // Create offline authentication components.
   // These use local_state prefs for offline cache persistence.
   offline_cache_ = std::make_unique<Allow2OfflineCache>(local_state_);
   deficit_tracker_ = std::make_unique<Allow2DeficitTracker>(local_state_);
   travel_mode_ = std::make_unique<Allow2TravelMode>(local_state_);
   local_decision_ = std::make_unique<Allow2LocalDecision>(offline_cache_.get());
 
-  // Set up warning controller callbacks
-  warning_controller_->SetWarningCallback(
-      base::BindRepeating(&Allow2Service::NotifyWarningThreshold,
-                          weak_ptr_factory_.GetWeakPtr()));
+  // Set up observers and callbacks.
+  SetupTrackingObservers();
 
-  warning_controller_->SetBlockCallback(
-      base::BindOnce(&Allow2Service::NotifyBlockingStateChanged,
-                     weak_ptr_factory_.GetWeakPtr(), true));
-
-  // Set up usage tracker observer to receive check results
-  usage_tracker_->AddObserver(this);
-
-  // Observe child shield for PIN acceptance events
-  child_shield_->AddObserver(this);
-
-  // Set up block overlay request time callback
-  block_overlay_->SetRequestTimeCallback(
-      base::BindOnce(&Allow2Service::OnRequestTimeFromOverlay,
-                     weak_ptr_factory_.GetWeakPtr()));
-
-  // Set up warning banner request time callback
-  warning_banner_->SetRequestTimeCallback(
-      base::BindOnce(&Allow2Service::OnRequestTimeFromBanner,
-                     weak_ptr_factory_.GetWeakPtr()));
-
-  // Load cached state
+  // Load cached state from prefs.
   is_blocked_ = profile_prefs_->GetBoolean(prefs::kAllow2Blocked);
   remaining_seconds_ = profile_prefs_->GetInteger(prefs::kAllow2RemainingSeconds);
 
-  // Load cached children into child manager
+  // Load cached children into child manager.
   std::vector<ChildInfo> child_infos;
   auto children = GetChildren();
   for (const auto& child : children) {
@@ -127,26 +137,94 @@ Allow2Service::Allow2Service(
   }
   child_manager_->UpdateChildList(child_infos);
 
-  // Start check timer if paired and enabled
-  if (IsPaired() && IsEnabled()) {
+  tracking_initialized_ = true;
+
+  // Start check timer if enabled.
+  if (IsEnabled()) {
     StartCheckTimer();
   }
 }
 
-Allow2Service::~Allow2Service() {
+void Allow2Service::DestroyTrackingComponents() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (!tracking_initialized_) {
+    return;  // Nothing to destroy
+  }
+
+  LOG(INFO) << "Allow2: Destroying tracking components (device released)";
+
+  // Stop timers and tracking first.
+  StopCheckTimer();
+  StopTracking();
+
+  // Tear down observers before destroying components.
+  TeardownTrackingObservers();
+
+  // Reset state.
+  is_blocked_ = false;
+  remaining_seconds_ = 0;
+  block_reason_.clear();
+  last_warning_level_ = WarningLevel::kNone;
+
+  // Destroy all tracking components.
+  local_decision_.reset();
+  travel_mode_.reset();
+  deficit_tracker_.reset();
+  offline_cache_.reset();
+  block_overlay_.reset();
+  warning_banner_.reset();
+  warning_controller_.reset();
+  usage_tracker_.reset();
+  child_shield_.reset();
+  child_manager_.reset();
+
+  tracking_initialized_ = false;
+}
+
+void Allow2Service::SetupTrackingObservers() {
+  // Set up warning controller callbacks.
+  if (warning_controller_) {
+    warning_controller_->SetWarningCallback(
+        base::BindRepeating(&Allow2Service::NotifyWarningThreshold,
+                            weak_ptr_factory_.GetWeakPtr()));
+    warning_controller_->SetBlockCallback(
+        base::BindOnce(&Allow2Service::NotifyBlockingStateChanged,
+                       weak_ptr_factory_.GetWeakPtr(), true));
+  }
+
+  // Set up usage tracker observer.
+  if (usage_tracker_) {
+    usage_tracker_->AddObserver(this);
+  }
+
+  // Set up child shield observer.
+  if (child_shield_) {
+    child_shield_->AddObserver(this);
+  }
+
+  // Set up block overlay callback.
+  if (block_overlay_) {
+    block_overlay_->SetRequestTimeCallback(
+        base::BindOnce(&Allow2Service::OnRequestTimeFromOverlay,
+                       weak_ptr_factory_.GetWeakPtr()));
+  }
+
+  // Set up warning banner callback.
+  if (warning_banner_) {
+    warning_banner_->SetRequestTimeCallback(
+        base::BindOnce(&Allow2Service::OnRequestTimeFromBanner,
+                       weak_ptr_factory_.GetWeakPtr()));
+  }
+}
+
+void Allow2Service::TeardownTrackingObservers() {
   if (usage_tracker_) {
     usage_tracker_->RemoveObserver(this);
   }
   if (child_shield_) {
     child_shield_->RemoveObserver(this);
   }
-}
-
-void Allow2Service::Shutdown() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  StopCheckTimer();
-  StopTracking();
-  observers_.Clear();
 }
 
 void Allow2Service::AddObserver(Allow2ServiceObserver* observer) {
@@ -264,11 +342,11 @@ void Allow2Service::CheckPairingStatus(const std::string& session_id,
 
             if (response.completed) {
               if (response.success) {
-                // Parent approved - store credentials
+                // Parent approved - store credentials.
                 self->credential_manager_->StoreCredentials(
                     response.user_id, response.pair_id, response.pair_token);
 
-                // Cache children list
+                // Cache children list in prefs (before InitializeTrackingComponents).
                 base::Value::List children_list;
                 for (const auto& child : response.children) {
                   base::Value::Dict child_dict;
@@ -283,13 +361,14 @@ void Allow2Service::CheckPairingStatus(const std::string& session_id,
                 self->profile_prefs_->SetString(prefs::kAllow2CachedChildren,
                                                 children_json);
 
-                // Notify observers
+                // Initialize all tracking components now that device is paired.
+                // This loads the children list, sets up observers, starts timer.
+                self->InitializeTrackingComponents();
+
+                // Notify observers that device is now paired.
                 for (auto& observer : self->observers_) {
                   observer.OnPairedStateChanged(true);
                 }
-
-                // Start check timer
-                self->StartCheckTimer();
 
                 std::move(callback).Run(true, true, "");
               } else {
@@ -717,7 +796,7 @@ void Allow2Service::ShowVoiceCodeUI() {
 void Allow2Service::StartTracking() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!IsPaired() || !IsEnabled()) {
+  if (!IsPaired() || !IsEnabled() || !usage_tracker_) {
     return;
   }
 
@@ -914,7 +993,9 @@ void Allow2Service::OnCheckResultInternal(const CheckResult& result) {
   profile_prefs_->SetTime(prefs::kAllow2LastCheckTime, base::Time::Now());
 
   // Update warning controller
-  warning_controller_->UpdateRemainingTime(remaining_seconds_);
+  if (warning_controller_) {
+    warning_controller_->UpdateRemainingTime(remaining_seconds_);
+  }
 
   // Update warning banner
   if (warning_banner_) {
@@ -964,36 +1045,22 @@ void Allow2Service::OnCheckResultInternal(const CheckResult& result) {
 void Allow2Service::OnCredentialsInvalidatedInternal() {
   LOG(WARNING) << "Allow2: Credentials invalidated (device unpaired remotely)";
 
-  // Clear all credentials and state
+  // Clear all credentials from secure storage.
   credential_manager_->ClearCredentials();
+
+  // Clear profile prefs related to tracking.
   profile_prefs_->ClearPref(prefs::kAllow2ChildId);
   profile_prefs_->ClearPref(prefs::kAllow2CachedChildren);
   profile_prefs_->ClearPref(prefs::kAllow2Blocked);
   profile_prefs_->ClearPref(prefs::kAllow2RemainingSeconds);
+  profile_prefs_->ClearPref(prefs::kAllow2CachedCheckResult);
+  profile_prefs_->ClearPref(prefs::kAllow2CachedCheckExpiry);
+  profile_prefs_->ClearPref(prefs::kAllow2DayTypeToday);
 
-  // Stop check timer and tracking
-  StopCheckTimer();
-  StopTracking();
+  // Destroy all tracking components (stops timers, hides UI, clears state).
+  DestroyTrackingComponents();
 
-  // Reset state
-  is_blocked_ = false;
-  remaining_seconds_ = 0;
-  block_reason_.clear();
-  warning_controller_->Reset();
-
-  // Hide any visible UI elements
-  DismissBlockOverlay();
-  if (warning_banner_) {
-    warning_banner_->Hide();
-  }
-
-  // Clear child manager
-  if (child_manager_) {
-    child_manager_->UpdateChildList({});
-    child_manager_->ClearSelection();
-  }
-
-  // Notify observers
+  // Notify observers that device is no longer paired.
   for (auto& observer : observers_) {
     observer.OnCredentialsInvalidated();
     observer.OnPairedStateChanged(false);

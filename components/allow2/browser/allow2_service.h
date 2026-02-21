@@ -382,6 +382,20 @@ class Allow2Service : public KeyedService,
   // Internal handler for credentials invalidated.
   void OnCredentialsInvalidatedInternal();
 
+  // Initialize tracking components (called when device is paired).
+  // Creates child manager, usage tracker, block overlay, offline cache, etc.
+  void InitializeTrackingComponents();
+
+  // Destroy tracking components (called when device is released).
+  // Resets all tracking-related unique_ptrs to nullptr.
+  void DestroyTrackingComponents();
+
+  // Set up observers for tracking components.
+  void SetupTrackingObservers();
+
+  // Tear down observers for tracking components.
+  void TeardownTrackingObservers();
+
   // Callback when "request time" is clicked in block overlay.
   void OnRequestTimeFromOverlay(int minutes, const std::string& message);
 
@@ -437,6 +451,10 @@ class Allow2Service : public KeyedService,
 
   // Last warning level that was notified.
   WarningLevel last_warning_level_ = WarningLevel::kNone;
+
+  // Whether tracking components have been initialized.
+  // Only true when device is paired. Set to false on release.
+  bool tracking_initialized_ = false;
 
   // Observers.
   base::ObserverList<Allow2ServiceObserver> observers_;
