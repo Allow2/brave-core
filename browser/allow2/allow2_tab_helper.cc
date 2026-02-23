@@ -41,12 +41,17 @@ Allow2TabHelper* Allow2TabHelper::GetOrCreate(content::WebContents* contents) {
 Allow2TabHelper::Allow2TabHelper(content::WebContents* contents)
     : content::WebContentsObserver(contents),
       content::WebContentsUserData<Allow2TabHelper>(*contents) {
+  // Register as observer to react to child changes immediately.
+  RegisterObserver();
+
   // Check for child shield immediately on tab helper creation.
   // This handles browser startup with existing tabs.
   MaybeShowChildShield();
 }
 
-Allow2TabHelper::~Allow2TabHelper() = default;
+Allow2TabHelper::~Allow2TabHelper() {
+  UnregisterObserver();
+}
 
 void Allow2TabHelper::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
@@ -206,18 +211,31 @@ bool Allow2TabHelper::MaybeShowChildShield() {
       browser,
       children,
       owner_name,
-      // Child selected callback
-      base::BindOnce(
+      // Service weak ptr for lockout state queries
+      service->GetWeakPtr(),
+      // Child selected callback - returns true if auth succeeded, false otherwise.
+      // The dialog will only close on success; on failure it stays open for retry.
+      // Using BindRepeating so the callback persists across multiple PIN attempts.
+      base::BindRepeating(
           [](base::WeakPtr<Allow2Service> weak_service,
-             uint64_t child_id, const std::string& pin) {
-            if (weak_service) {
-              // Validate PIN and select child
-              if (weak_service->SelectChild(child_id, pin)) {
-                LOG(INFO) << "Allow2: Child " << child_id << " selected and authenticated";
-              } else {
-                LOG(WARNING) << "Allow2: Invalid PIN for child " << child_id;
+             uint64_t child_id, const std::string& pin,
+             std::string* debug_info) -> bool {
+            if (!weak_service) {
+              if (debug_info) {
+                *debug_info = "Service unavailable";
               }
+              return false;
             }
+            // Validate PIN and select child, getting debug info
+            bool success = weak_service->SelectChildWithDebug(
+                child_id, pin, debug_info);
+            if (success) {
+              LOG(INFO) << "Allow2: Child " << child_id
+                        << " selected and authenticated";
+            } else {
+              LOG(WARNING) << "Allow2: Invalid PIN for child " << child_id;
+            }
+            return success;
           },
           service->GetWeakPtr()),
       // Owner callback (used when parent/owner is selected)
@@ -292,6 +310,48 @@ bool Allow2TabHelper::ShouldTrack() const {
 
   // Only track if paired and enabled.
   return service->IsPaired() && service->IsEnabled();
+}
+
+void Allow2TabHelper::RegisterObserver() {
+  if (is_observing_) {
+    return;
+  }
+
+  Allow2Service* service = GetService();
+  if (service) {
+    service->AddObserver(this);
+    service_weak_ptr_ = service->GetWeakPtr();
+    is_observing_ = true;
+  }
+}
+
+void Allow2TabHelper::UnregisterObserver() {
+  if (!is_observing_) {
+    return;
+  }
+
+  if (service_weak_ptr_) {
+    service_weak_ptr_->RemoveObserver(this);
+  }
+  is_observing_ = false;
+}
+
+void Allow2TabHelper::OnCurrentChildChanged(const std::optional<Child>& child) {
+  if (!child.has_value()) {
+    // No authenticated user - show child shield immediately.
+    LOG(INFO) << "Allow2: Child cleared, showing selection shield";
+    MaybeShowChildShield();
+  } else {
+    LOG(INFO) << "Allow2: Child " << child->id << " (" << child->name
+              << ") selected";
+  }
+}
+
+void Allow2TabHelper::OnPairedStateChanged(bool is_paired) {
+  if (is_paired) {
+    // Just paired - show child shield to require authentication.
+    MaybeShowChildShield();
+  }
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(Allow2TabHelper);

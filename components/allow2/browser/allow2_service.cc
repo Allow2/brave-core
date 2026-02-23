@@ -552,6 +552,221 @@ bool Allow2Service::SelectChild(uint64_t child_id, const std::string& pin) {
   return false;
 }
 
+bool Allow2Service::SelectChildWithDebug(uint64_t child_id,
+                                         const std::string& pin,
+                                         std::string* debug_info) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // Check if user is locked out.
+  int lockout_remaining = 0;
+  if (IsUserLockedOut(child_id, &lockout_remaining)) {
+    if (debug_info) {
+      int minutes = lockout_remaining / 60;
+      int seconds = lockout_remaining % 60;
+      *debug_info = "LOCKED OUT: " + std::to_string(minutes) + "m " +
+                    std::to_string(seconds) + "s remaining";
+    }
+    return false;
+  }
+
+  // Handle parent/owner selection (child_id == 0).
+  if (child_id == 0) {
+    if (!local_state_) {
+      if (debug_info) {
+        *debug_info = "Local state not available";
+      }
+      return false;
+    }
+
+    std::string owner_pin_hash =
+        local_state_->GetString(prefs::kAllow2OwnerPinHash);
+    std::string owner_pin_salt =
+        local_state_->GetString(prefs::kAllow2OwnerPinSalt);
+
+    // If owner PIN is not set, set it from this first authentication.
+    if (owner_pin_hash.empty() || owner_pin_salt.empty()) {
+      owner_pin_salt = base::Uuid::GenerateRandomV4().AsLowercaseString();
+      owner_pin_hash = HashPin(pin, owner_pin_salt);
+
+      local_state_->SetString(prefs::kAllow2OwnerPinHash, owner_pin_hash);
+      local_state_->SetString(prefs::kAllow2OwnerPinSalt, owner_pin_salt);
+
+      if (debug_info) {
+        *debug_info = "Owner PIN set for first time";
+      }
+      // Clear any lockout on successful PIN setup.
+      ClearPinLockout(child_id);
+    } else {
+      // Validate the entered PIN against stored hash.
+      std::string computed_hash = HashPin(pin, owner_pin_salt);
+      if (computed_hash != owner_pin_hash) {
+        // Record failed attempt.
+        int lockout_secs = RecordFailedPinAttempt(child_id);
+        int attempts = pin_failed_attempts_[child_id];
+        if (debug_info) {
+          *debug_info = "Stored: " + owner_pin_hash + "\n" +
+                        "Computed: " + computed_hash + "\n" +
+                        "Attempts: " + std::to_string(attempts);
+          if (lockout_secs > 0) {
+            *debug_info += " (Locked " + std::to_string(lockout_secs / 60) + "m)";
+          }
+        }
+        return false;
+      }
+      // Success - clear lockout.
+      ClearPinLockout(child_id);
+    }
+
+    // Set child_id to 0 (owner/parent mode).
+    profile_prefs_->SetString(prefs::kAllow2ChildId, "0");
+
+    Child owner_child;
+    owner_child.id = 0;
+    owner_child.name = GetAccountOwnerName();
+    if (owner_child.name.empty()) {
+      owner_child.name = "Parent";
+    }
+
+    for (auto& observer : observers_) {
+      observer.OnCurrentChildChanged(owner_child);
+    }
+
+    return true;
+  }
+
+  // Handle child selection (child_id > 0).
+  auto children = GetChildren();
+  for (const auto& child : children) {
+    if (child.id == child_id) {
+      // Compute hash and compare
+      std::string computed_hash = HashPin(pin, child.pin_salt);
+      if (computed_hash != child.pin_hash) {
+        // Record failed attempt and potentially trigger lockout.
+        int lockout_secs = RecordFailedPinAttempt(child_id);
+        int attempts = pin_failed_attempts_[child_id];
+        if (debug_info) {
+          *debug_info = "Stored: " + child.pin_hash + "\n" +
+                        "Computed: " + computed_hash + "\n" +
+                        "Attempts: " + std::to_string(attempts);
+          if (lockout_secs > 0) {
+            *debug_info += "\nTry again in " + std::to_string(lockout_secs / 60) +
+                           " minutes";
+          }
+        }
+        return false;
+      }
+
+      // Success - clear any lockout for this child.
+      ClearPinLockout(child_id);
+
+      // Set current child
+      profile_prefs_->SetString(prefs::kAllow2ChildId,
+                                std::to_string(child_id));
+
+      // Notify observers
+      for (auto& observer : observers_) {
+        observer.OnCurrentChildChanged(child);
+      }
+
+      // Trigger an immediate check
+      CheckAllowance(base::DoNothing());
+
+      return true;
+    }
+  }
+
+  if (debug_info) {
+    *debug_info = "Child " + std::to_string(child_id) + " not found";
+  }
+  return false;
+}
+
+// ============================================================================
+// PIN Lockout (Rate Limiting)
+// ============================================================================
+
+bool Allow2Service::IsUserLockedOut(uint64_t child_id,
+                                    int* remaining_seconds) const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  auto it = pin_lockout_until_.find(child_id);
+  if (it == pin_lockout_until_.end()) {
+    if (remaining_seconds) {
+      *remaining_seconds = 0;
+    }
+    return false;
+  }
+
+  base::Time now = base::Time::Now();
+  if (now >= it->second) {
+    // Lockout has expired.
+    if (remaining_seconds) {
+      *remaining_seconds = 0;
+    }
+    return false;
+  }
+
+  // Still locked out.
+  if (remaining_seconds) {
+    *remaining_seconds =
+        static_cast<int>((it->second - now).InSeconds());
+  }
+  return true;
+}
+
+int Allow2Service::RecordFailedPinAttempt(uint64_t child_id) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // Increment failed attempts.
+  pin_failed_attempts_[child_id]++;
+  int attempts = pin_failed_attempts_[child_id];
+
+  // Determine lockout duration based on attempt count.
+  // 3 failures = 5 min, 6 = 15 min, 9 = 30 min, 12+ = 1 hour
+  int lockout_seconds = 0;
+  if (attempts >= 12) {
+    lockout_seconds = 60 * 60;  // 1 hour
+  } else if (attempts >= 9) {
+    lockout_seconds = 30 * 60;  // 30 minutes
+  } else if (attempts >= 6) {
+    lockout_seconds = 15 * 60;  // 15 minutes
+  } else if (attempts >= 3) {
+    lockout_seconds = 5 * 60;   // 5 minutes
+  }
+
+  if (lockout_seconds > 0) {
+    pin_lockout_until_[child_id] =
+        base::Time::Now() + base::Seconds(lockout_seconds);
+    LOG(WARNING) << "Allow2: User " << child_id << " locked out for "
+                 << (lockout_seconds / 60) << " minutes after "
+                 << attempts << " failed PIN attempts";
+  }
+
+  return lockout_seconds;
+}
+
+void Allow2Service::ClearPinLockout(uint64_t child_id) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  pin_failed_attempts_.erase(child_id);
+  pin_lockout_until_.erase(child_id);
+}
+
+std::map<uint64_t, int> Allow2Service::GetLockedOutUsers() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  std::map<uint64_t, int> result;
+  base::Time now = base::Time::Now();
+
+  for (const auto& [child_id, lockout_time] : pin_lockout_until_) {
+    if (now < lockout_time) {
+      result[child_id] = static_cast<int>((lockout_time - now).InSeconds());
+    }
+  }
+
+  return result;
+}
+
 std::optional<Child> Allow2Service::GetCurrentChild() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 

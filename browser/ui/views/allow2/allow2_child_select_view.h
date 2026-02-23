@@ -6,14 +6,18 @@
 #ifndef BRAVE_BROWSER_UI_VIEWS_ALLOW2_ALLOW2_CHILD_SELECT_VIEW_H_
 #define BRAVE_BROWSER_UI_VIEWS_ALLOW2_ALLOW2_CHILD_SELECT_VIEW_H_
 
+#include <array>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/timer/timer.h"
 #include "brave/components/allow2/browser/allow2_service.h"
+#include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/controls/textfield/textfield_controller.h"
 #include "ui/views/view.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -23,10 +27,12 @@ class Browser;
 namespace views {
 class Label;
 class MdTextButton;
-class Textfield;
 }  // namespace views
 
 namespace allow2 {
+
+// Number of digits in the PIN.
+constexpr size_t kPinDigitCount = 4;
 
 // Child selection shield shown on shared devices.
 // This modal dialog appears:
@@ -40,15 +46,22 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
   METADATA_HEADER(Allow2ChildSelectView, views::DialogDelegateView)
 
  public:
-  using ChildSelectedCallback = base::OnceCallback<void(uint64_t child_id,
-                                                        const std::string& pin)>;
+  // Returns true if authentication succeeded (dialog should close),
+  // false if PIN was invalid (dialog stays open for retry).
+  // The third parameter (out) receives debug info for display on failure.
+  using ChildSelectedCallback = base::RepeatingCallback<bool(
+      uint64_t child_id,
+      const std::string& pin,
+      std::string* debug_info)>;
   using GuestCallback = base::OnceClosure;
 
   // Shows the child selection dialog for the given browser.
   // |owner_name| is the name of the account owner (shown instead of "Guest").
+  // |service| is used to query lockout state for rate limiting.
   static void Show(Browser* browser,
                    const std::vector<Child>& children,
                    const std::string& owner_name,
+                   base::WeakPtr<Allow2Service> service,
                    ChildSelectedCallback child_selected_callback,
                    GuestCallback guest_callback);
 
@@ -73,6 +86,13 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
     // Set selected state (highlights the button).
     void SetSelected(bool selected);
 
+    // Set lockout state with remaining seconds.
+    // When locked_out is true, button is disabled and shows countdown.
+    void SetLockedOut(bool locked_out, int remaining_seconds);
+
+    // Check if currently locked out.
+    bool IsLockedOut() const { return locked_out_; }
+
     // views::View overrides:
     bool OnMousePressed(const ui::MouseEvent& event) override;
 
@@ -86,16 +106,25 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
     // Get color for avatar background.
     static SkColor GetAvatarColor(const Child& child);
 
+    // Format lockout time as "Xm Ys".
+    static std::u16string FormatLockoutTime(int remaining_seconds);
+
     uint64_t child_id_ = 0;
     bool selected_ = false;
+    bool locked_out_ = false;
     base::RepeatingCallback<void(uint64_t)> on_click_;
     raw_ptr<views::View> avatar_view_ = nullptr;
     raw_ptr<views::Label> name_label_ = nullptr;
+    raw_ptr<views::Label> lockout_label_ = nullptr;
   };
+
+  // Creates and configures a PIN digit field.
+  views::Textfield* CreatePinDigitField();
 
   Allow2ChildSelectView(Browser* browser,
                         const std::vector<Child>& children,
                         const std::string& owner_name,
+                        base::WeakPtr<Allow2Service> service,
                         ChildSelectedCallback child_selected_callback,
                         GuestCallback guest_callback);
   ~Allow2ChildSelectView() override;
@@ -121,11 +150,50 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
   // Update UI based on selected child.
   void UpdatePinVisibility();
 
-  // Show PIN error message.
+  // Show PIN error message and clear all fields.
   void ShowPinError(const std::string& message);
 
   // Clear PIN error message.
   void ClearPinError();
+
+  // Get the combined PIN from all digit fields.
+  std::u16string GetCombinedPin() const;
+
+  // Check if all PIN digit fields are filled.
+  bool IsPinComplete() const;
+
+  // Clear all PIN digit fields and focus the first one.
+  void ClearPinFields();
+
+  // Focus the next PIN digit field after the given index.
+  void FocusNextPinField(size_t current_index);
+
+  // Focus the previous PIN digit field before the given index.
+  void FocusPreviousPinField(size_t current_index);
+
+  // Handle pasted text by distributing digits across fields.
+  void HandlePastedPin(const std::u16string& pasted_text);
+
+  // Get the index of a PIN digit field, or -1 if not found.
+  int GetPinFieldIndex(views::Textfield* field) const;
+
+  // Update confirm button enabled state based on PIN completion.
+  void UpdateConfirmButtonState();
+
+  // Return to account selection screen (clear selection, hide PIN).
+  void ReturnToAccountSelection();
+
+  // Update lockout state for all child buttons.
+  void UpdateLockoutStates();
+
+  // Called periodically by timer to refresh lockout countdowns.
+  void OnLockoutTimerTick();
+
+  // Start lockout refresh timer.
+  void StartLockoutTimer();
+
+  // Stop lockout refresh timer.
+  void StopLockoutTimer();
 
   raw_ptr<Browser> browser_ = nullptr;
   std::vector<Child> children_;
@@ -138,10 +206,20 @@ class Allow2ChildSelectView : public views::DialogDelegateView,
   raw_ptr<views::View> children_container_ = nullptr;
   raw_ptr<views::View> pin_container_ = nullptr;
   raw_ptr<views::Label> pin_label_ = nullptr;
-  raw_ptr<views::Textfield> pin_field_ = nullptr;
+  raw_ptr<views::View> pin_digits_container_ = nullptr;
+  std::array<raw_ptr<views::Textfield>, kPinDigitCount> pin_digit_fields_{};
   raw_ptr<views::Label> pin_error_label_ = nullptr;
   raw_ptr<views::MdTextButton> confirm_button_ = nullptr;
   raw_ptr<views::MdTextButton> guest_button_ = nullptr;
+
+  // Flag to prevent re-entrancy during auto-submit.
+  bool is_submitting_ = false;
+
+  // Service weak pointer for lockout state queries.
+  base::WeakPtr<Allow2Service> service_;
+
+  // Timer for refreshing lockout countdown display.
+  base::RepeatingTimer lockout_timer_;
 
   ChildSelectedCallback child_selected_callback_;
   GuestCallback guest_callback_;

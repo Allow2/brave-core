@@ -6,6 +6,7 @@
 #ifndef BRAVE_COMPONENTS_ALLOW2_BROWSER_ALLOW2_SERVICE_H_
 #define BRAVE_COMPONENTS_ALLOW2_BROWSER_ALLOW2_SERVICE_H_
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -218,6 +219,30 @@ class Allow2Service : public KeyedService,
   // Select a child for the current session (shared device mode).
   // Returns false if PIN validation fails.
   bool SelectChild(uint64_t child_id, const std::string& pin);
+
+  // Select a child with debug info output (for PIN debugging).
+  // If debug_info is non-null, it will be filled with hash comparison info.
+  bool SelectChildWithDebug(uint64_t child_id,
+                            const std::string& pin,
+                            std::string* debug_info);
+
+  // ============================================================================
+  // PIN Lockout (Rate Limiting)
+  // ============================================================================
+
+  // Check if a user is currently locked out from PIN entry.
+  // Returns true if locked out, and sets |remaining_seconds| if non-null.
+  bool IsUserLockedOut(uint64_t child_id, int* remaining_seconds = nullptr) const;
+
+  // Record a failed PIN attempt for a user. Returns the new lockout duration
+  // in seconds (0 if no lockout triggered yet).
+  int RecordFailedPinAttempt(uint64_t child_id);
+
+  // Clear lockout state for a user (called on successful login).
+  void ClearPinLockout(uint64_t child_id);
+
+  // Get all users currently in lockout with their remaining seconds.
+  std::map<uint64_t, int> GetLockedOutUsers() const;
 
   // Get the currently selected child, or nullopt if none selected.
   std::optional<Child> GetCurrentChild() const;
@@ -467,6 +492,12 @@ class Allow2Service : public KeyedService,
   // Whether tracking components have been initialized.
   // Only true when device is paired. Set to false on release.
   bool tracking_initialized_ = false;
+
+  // PIN lockout tracking (rate limiting).
+  // Maps child_id (0 = parent) to failed attempt count.
+  std::map<uint64_t, int> pin_failed_attempts_;
+  // Maps child_id to lockout expiry time.
+  std::map<uint64_t, base::Time> pin_lockout_until_;
 
   // Observers.
   base::ObserverList<Allow2ServiceObserver> observers_;
