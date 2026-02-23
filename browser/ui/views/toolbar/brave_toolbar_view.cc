@@ -65,6 +65,9 @@
 #include "brave/components/brave_wallet/common/common_utils.h"
 #endif
 
+#include "brave/browser/allow2/allow2_service_factory.h"
+#include "brave/browser/ui/views/toolbar/allow2_button.h"
+
 namespace {
 constexpr int kLocationBarMaxWidth = 1080;
 
@@ -314,6 +317,14 @@ void BraveToolbarView::Init() {
     brave_vpn_->SetVisible(IsBraveVPNButtonVisible());
   }
 #endif
+
+  // Allow2 parental controls button - shows current user with switch dropdown.
+  if (allow2::Allow2ServiceFactory::GetForProfile(profile)) {
+    allow2_button_ = container_view->AddChildViewAt(
+        std::make_unique<allow2::Allow2Button>(browser(), profile),
+        *container_view->GetIndexOf(GetAppMenuButton()) - 1);
+    // Visibility is managed by the button itself based on pairing state.
+  }
 
   // Make sure that avatar button should be located right before the app menu.
   if (auto* avatar = GetAvatarToolbarButton()) {

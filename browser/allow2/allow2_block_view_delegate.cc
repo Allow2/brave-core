@@ -64,7 +64,9 @@ void Allow2BlockViewDelegate::OnRequestTime(int minutes,
 
 void Allow2BlockViewDelegate::OnSwitchUser() {
   if (service_) {
-    service_->ShowChildShield();
+    // Clear the current child, which will trigger the child selection shield
+    // via the Allow2ServiceObserver mechanism in the tab helper.
+    service_->ClearCurrentChild();
   }
 }
 

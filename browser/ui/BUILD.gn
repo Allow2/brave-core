@@ -660,6 +660,8 @@ source_set("ui") {
       "views/toolbar/brave_app_menu.h",
       "views/toolbar/brave_browser_app_menu_button.cc",
       "views/toolbar/brave_browser_app_menu_button.h",
+      "views/toolbar/allow2_button.cc",
+      "views/toolbar/allow2_button.h",
       "views/toolbar/side_panel_button.cc",
       "views/toolbar/side_panel_button.h",
       "views/view_shadow.cc",

@@ -24,6 +24,10 @@ class AIChatButton;
 class BraveVPNButton;
 #endif
 
+namespace allow2 {
+class Allow2Button;
+}  // namespace allow2
+
 class BraveBookmarkButton;
 class SidePanelButton;
 class WalletButton;
@@ -40,6 +44,7 @@ class BraveToolbarView : public ToolbarView,
   BraveBookmarkButton* bookmark_button() const { return bookmark_; }
   WalletButton* wallet_button() const { return wallet_; }
   SidePanelButton* side_panel_button() const { return side_panel_; }
+  allow2::Allow2Button* allow2_button() const { return allow2_button_; }
 #if BUILDFLAG(ENABLE_AI_CHAT)
   AIChatButton* ai_chat_button() const { return ai_chat_button_; }
 #endif
@@ -93,6 +98,7 @@ class BraveToolbarView : public ToolbarView,
 
   raw_ptr<WalletButton> wallet_ = nullptr;
   raw_ptr<SidePanelButton> side_panel_ = nullptr;
+  raw_ptr<allow2::Allow2Button> allow2_button_ = nullptr;
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
   raw_ptr<BraveVPNButton> brave_vpn_ = nullptr;
